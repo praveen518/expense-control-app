@@ -1,6 +1,6 @@
 import React from 'react';
 import { SafeAreaView, View, StyleSheet } from 'react-native';
-import { AppHeader } from './AppHeader';
+import { AppHeader } from '../components/AppHeader';
 
 export const AppLayout = ({ children }: { children: React.ReactNode }) => {
   return (

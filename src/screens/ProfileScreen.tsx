@@ -2,15 +2,23 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { getSalary } from '../storage/salaryStorage';
 import { formatINR } from '../utils/currency';
+import { getPockets } from '../storage/pocketStorage';
+import { getRemainingSalary, getTotalAllocated } from '../utils/salary';
 
 export const ProfileScreen = ({ navigation }: any) => {
   const [salary, setSalary] = useState<number | null>(null);
+    const [allocated, setAllocated] = useState(0);
 
   useEffect(() => {
     const load = async () => {
-      const data = await getSalary();
-      if (data) setSalary(data.monthly);
-    };
+  const salaryData = await getSalary();
+  const pockets = await getPockets();
+
+  if (salaryData) {
+    setSalary(salaryData.monthly);
+    setAllocated(getTotalAllocated(pockets));
+  }
+};
     const unsubscribe = navigation.addListener('focus', load);
     return unsubscribe;
   }, [navigation]);
@@ -23,6 +31,16 @@ export const ProfileScreen = ({ navigation }: any) => {
       <Text style={styles.value}>
         {salary ? formatINR(salary) : 'Not set'}
       </Text>
+      {salary !== null && (
+  <>
+    <Text style={styles.meta}>
+      Allocated: {formatINR(allocated)}
+    </Text>
+    <Text style={styles.remaining}>
+      Remaining: {formatINR(salary - allocated)}
+    </Text>
+  </>
+)}
 
     <Pressable onPress={() => navigation.navigate('Pockets')}>
         <Text style={styles.link}>View Pockets</Text>
@@ -55,4 +73,13 @@ const styles = StyleSheet.create({
     color: '#2563eb',
     fontSize: 16,
   },
+  meta: {
+  fontSize: 14,
+  color: '#475569',
+},
+remaining: {
+  fontSize: 16,
+  fontWeight: '600',
+  marginTop: 4,
+},
 });
