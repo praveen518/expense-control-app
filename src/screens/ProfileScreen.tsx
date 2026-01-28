@@ -24,6 +24,9 @@ export const ProfileScreen = ({ navigation }: any) => {
         {salary ? formatINR(salary) : 'Not set'}
       </Text>
 
+    <Pressable onPress={() => navigation.navigate('Pockets')}>
+        <Text style={styles.link}>View Pockets</Text>
+    </Pressable>
       <Pressable onPress={() => navigation.navigate('Settings')}>
         <Text style={styles.link}>Go to Settings</Text>
       </Pressable>

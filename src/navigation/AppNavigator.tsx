@@ -4,6 +4,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ChangeSalaryScreen } from '../screens/ChangeSalaryScreen';
+import { PocketsScreen } from '../screens/PocketsScreen';
+
 
 const Stack = createNativeStackNavigator();
 
@@ -18,6 +20,7 @@ export const AppNavigator = () => {
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="ChangeSalary" component={ChangeSalaryScreen} />
+        <Stack.Screen name="Pockets" component={PocketsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
