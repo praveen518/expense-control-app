@@ -8,6 +8,9 @@ import {
 } from 'react-native';
 import { getPockets } from '../storage/pocketStorage';
 import { getExpenses } from '../storage/expenseStorage';
+import {
+  getOpeningBalance,
+} from '../storage/openingBalanceStorage';
 import { Pocket } from '../types/pocket';
 import { Expense } from '../types/expense';
 import { formatINR } from '../utils/currency';
@@ -17,20 +20,31 @@ import { getSpentForPocketInMonth } from '../utils/expenseMath';
 export const PocketsScreen = ({ navigation }: any) => {
   const [pockets, setPockets] = useState<Pocket[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [openingMap, setOpeningMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const load = async () => {
-      const pocketsData = await getPockets();
-      const expensesData = await getExpenses();
+      const p = await getPockets();
+      const e = await getExpenses();
+      const month = getCurrentMonth();
 
-      setPockets(pocketsData);
-      setExpenses(expensesData);
+      const openings: Record<string, number> = {};
+      for (const pocket of p) {
+        openings[pocket.id] = await getOpeningBalance(
+          month,
+          pocket.id
+        );
+      }
+
+      setPockets(p);
+      setExpenses(e);
+      setOpeningMap(openings);
     };
 
-    const unsubscribe = navigation.addListener('focus', load);
+    const unsub = navigation.addListener('focus', load);
     load();
 
-    return unsubscribe;
+    return unsub;
   }, [navigation]);
 
   const renderItem = ({ item }: { item: Pocket }) => {
@@ -40,7 +54,10 @@ export const PocketsScreen = ({ navigation }: any) => {
       getCurrentMonth()
     );
 
-    const remaining = item.allocated - spent;
+    const opening = openingMap[item.id] ?? 0;
+
+    const remaining =
+      item.allocated + opening - spent;
 
     return (
       <Pressable
@@ -52,7 +69,12 @@ export const PocketsScreen = ({ navigation }: any) => {
         }
       >
         <Text style={styles.name}>{item.name}</Text>
-        <Text style={styles.amount}>
+        <Text
+          style={[
+            styles.amount,
+            remaining < 0 && styles.negative,
+          ]}
+        >
           {formatINR(remaining)}
         </Text>
       </Pressable>
@@ -61,12 +83,15 @@ export const PocketsScreen = ({ navigation }: any) => {
 
   return (
     <View style={styles.container}>
-      {/* Create Pocket */}
       <Pressable
         style={styles.addButton}
-        onPress={() => navigation.navigate('CreatePocket')}
+        onPress={() =>
+          navigation.navigate('CreatePocket')
+        }
       >
-        <Text style={styles.addText}>+ Create Pocket</Text>
+        <Text style={styles.addText}>
+          + Create Pocket
+        </Text>
       </Pressable>
 
       {pockets.length === 0 ? (
@@ -76,7 +101,7 @@ export const PocketsScreen = ({ navigation }: any) => {
       ) : (
         <FlatList
           data={pockets}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(i) => i.id}
           renderItem={renderItem}
         />
       )}
@@ -85,12 +110,8 @@ export const PocketsScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-  },
-  addButton: {
-    marginBottom: 12,
-  },
+  container: { padding: 16 },
+  addButton: { marginBottom: 12 },
   addText: {
     color: '#2563eb',
     fontSize: 16,
@@ -99,7 +120,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
@@ -109,7 +130,10 @@ const styles = StyleSheet.create({
   },
   amount: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  negative: {
+    color: '#dc2626',
   },
   empty: {
     marginTop: 12,

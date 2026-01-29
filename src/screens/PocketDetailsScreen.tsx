@@ -8,6 +8,9 @@ import {
 } from 'react-native';
 import { getPockets } from '../storage/pocketStorage';
 import { getExpenses, addExpense } from '../storage/expenseStorage';
+import {
+  getOpeningBalance,
+} from '../storage/openingBalanceStorage';
 import { Pocket } from '../types/pocket';
 import { Expense } from '../types/expense';
 import { getCurrentMonth } from '../utils/month';
@@ -19,6 +22,7 @@ export const PocketDetailScreen = ({ route, navigation }: any) => {
 
   const [pocket, setPocket] = useState<Pocket | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [opening, setOpening] = useState(0);
   const [amount, setAmount] = useState('');
 
   useEffect(() => {
@@ -27,9 +31,15 @@ export const PocketDetailScreen = ({ route, navigation }: any) => {
       const expensesData = await getExpenses();
 
       const found = pockets.find((p) => p.id === pocketId);
+      const month = getCurrentMonth();
+      const openingBalance = await getOpeningBalance(
+        month,
+        pocketId
+      );
 
       if (found) setPocket(found);
       setExpenses(expensesData);
+      setOpening(openingBalance);
     };
 
     load();
@@ -37,31 +47,21 @@ export const PocketDetailScreen = ({ route, navigation }: any) => {
 
   if (!pocket) return null;
 
-  const currentMonth = getCurrentMonth();
+  const month = getCurrentMonth();
 
   const spent = getSpentForPocketInMonth(
     expenses,
     pocket.id,
-    currentMonth
+    month
   );
 
-  const remaining = pocket.allocated - spent;
+  const remaining =
+    pocket.allocated + opening - spent;
 
   const onAddExpense = async () => {
     const value = Number(amount);
-
     if (!value || value <= 0) {
       alert('Enter a valid amount');
-      return;
-    }
-
-    // ⚠️ Temporary hard block (will be removed in Debt step)
-    if (value > remaining) {
-      alert(
-        `Expense exceeds remaining budget.\nAvailable: ${formatINR(
-          remaining
-        )}`
-      );
       return;
     }
 
@@ -69,7 +69,7 @@ export const PocketDetailScreen = ({ route, navigation }: any) => {
       id: Date.now().toString(),
       pocketId,
       amount: value,
-      month: currentMonth,
+      month,
       createdAt: new Date().toISOString(),
     });
 
@@ -78,17 +78,25 @@ export const PocketDetailScreen = ({ route, navigation }: any) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{pocket.name}</Text>
-      <Text style={styles.sub}>
+      <Text style={styles.title}>
+        {pocket.name}
+      </Text>
+
+      <Text
+        style={[
+          styles.remaining,
+          remaining < 0 && styles.negative,
+        ]}
+      >
         Remaining: {formatINR(remaining)}
       </Text>
 
       <TextInput
-        placeholder="Expense amount"
+        style={styles.input}
         keyboardType="numeric"
+        placeholder="Expense amount"
         value={amount}
         onChangeText={setAmount}
-        style={styles.input}
       />
 
       <Button title="Add Expense" onPress={onAddExpense} />
@@ -97,17 +105,18 @@ export const PocketDetailScreen = ({ route, navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-  },
+  container: { padding: 16 },
   title: {
     fontSize: 22,
     fontWeight: '700',
   },
-  sub: {
+  remaining: {
     marginVertical: 8,
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  negative: {
+    color: '#dc2626',
   },
   input: {
     borderWidth: 1,

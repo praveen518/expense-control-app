@@ -11,3 +11,19 @@ export const getSpentForPocketInMonth = (
     )
     .reduce((sum, e) => sum + e.amount, 0);
 };
+
+export const getRemainingForPocketInMonth = (
+  allocated: number,
+  openingBalance: number,
+  expenses: Expense[],
+  pocketId: string,
+  month: string
+): number => {
+  const spent = getSpentForPocketInMonth(
+    expenses,
+    pocketId,
+    month
+  );
+
+  return allocated + openingBalance - spent;
+};
