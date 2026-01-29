@@ -5,11 +5,13 @@ import {
   StyleSheet,
   Pressable,
 } from 'react-native';
+
 import { getPockets } from '../storage/pocketStorage';
-import { getExpenses } from '../storage/expenseStorage';
 import { getOpeningBalance } from '../storage/openingBalanceStorage';
+
 import { Pocket } from '../types/pocket';
 import { Expense } from '../types/expense';
+
 import { formatINR } from '../utils/currency';
 import { getCurrentMonth } from '../utils/month';
 import { getSpentForPocketInMonth } from '../utils/expenseMath';
@@ -18,16 +20,19 @@ import {
   getHealthRank,
 } from '../utils/pocketHealth';
 
+import { useExpenses } from '../hooks/useExpenses';
+
 export const DashboardScreen = ({ navigation }: any) => {
   const [pockets, setPockets] = useState<Pocket[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [openingMap, setOpeningMap] =
     useState<Record<string, number>>({});
+
+  // ✅ EXPENSES NOW COME FROM STORE
+  const expenses: Expense[] = useExpenses();
 
   useEffect(() => {
     const load = async () => {
       const pocketsData = await getPockets();
-      const expensesData = await getExpenses();
       const month = getCurrentMonth();
 
       const openings: Record<string, number> = {};
@@ -39,7 +44,6 @@ export const DashboardScreen = ({ navigation }: any) => {
       }
 
       setPockets(pocketsData);
-      setExpenses(expensesData);
       setOpeningMap(openings);
     };
 

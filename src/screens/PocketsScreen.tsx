@@ -6,26 +6,32 @@ import {
   FlatList,
   Pressable,
 } from 'react-native';
+
 import { getPockets } from '../storage/pocketStorage';
-import { getExpenses } from '../storage/expenseStorage';
 import {
   getOpeningBalance,
 } from '../storage/openingBalanceStorage';
+
 import { Pocket } from '../types/pocket';
 import { Expense } from '../types/expense';
+
 import { formatINR } from '../utils/currency';
 import { getCurrentMonth } from '../utils/month';
 import { getSpentForPocketInMonth } from '../utils/expenseMath';
 
+import { useExpenses } from '../hooks/useExpenses';
+
 export const PocketsScreen = ({ navigation }: any) => {
   const [pockets, setPockets] = useState<Pocket[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [openingMap, setOpeningMap] = useState<Record<string, number>>({});
+  const [openingMap, setOpeningMap] =
+    useState<Record<string, number>>({});
+
+  // ✅ EXPENSES FROM STORE
+  const expenses: Expense[] = useExpenses();
 
   useEffect(() => {
     const load = async () => {
       const p = await getPockets();
-      const e = await getExpenses();
       const month = getCurrentMonth();
 
       const openings: Record<string, number> = {};
@@ -37,7 +43,6 @@ export const PocketsScreen = ({ navigation }: any) => {
       }
 
       setPockets(p);
-      setExpenses(e);
       setOpeningMap(openings);
     };
 

@@ -6,31 +6,35 @@ import {
   Button,
   StyleSheet,
 } from 'react-native';
+
 import { getPockets } from '../storage/pocketStorage';
-import { getExpenses, addExpense } from '../storage/expenseStorage';
-import {
-  getOpeningBalance,
-} from '../storage/openingBalanceStorage';
+import { getOpeningBalance } from '../storage/openingBalanceStorage';
+
 import { Pocket } from '../types/pocket';
 import { Expense } from '../types/expense';
+
 import { getCurrentMonth } from '../utils/month';
 import { getSpentForPocketInMonth } from '../utils/expenseMath';
 import { formatINR } from '../utils/currency';
+
+import { useExpenses } from '../hooks/useExpenses';
+import { expenseStore } from '../store/expense/expenseStore.instance';
 
 export const PocketDetailScreen = ({ route, navigation }: any) => {
   const { pocketId } = route.params;
 
   const [pocket, setPocket] = useState<Pocket | null>(null);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [opening, setOpening] = useState(0);
   const [amount, setAmount] = useState('');
+
+  // ✅ EXPENSES FROM STORE (single source of truth)
+  const expenses: Expense[] = useExpenses();
 
   useEffect(() => {
     const load = async () => {
       const pockets = await getPockets();
-      const expensesData = await getExpenses();
-
       const found = pockets.find((p) => p.id === pocketId);
+
       const month = getCurrentMonth();
       const openingBalance = await getOpeningBalance(
         month,
@@ -38,7 +42,6 @@ export const PocketDetailScreen = ({ route, navigation }: any) => {
       );
 
       if (found) setPocket(found);
-      setExpenses(expensesData);
       setOpening(openingBalance);
     };
 
@@ -65,13 +68,16 @@ export const PocketDetailScreen = ({ route, navigation }: any) => {
       return;
     }
 
-    await addExpense({
+    const expense: Expense = {
       id: Date.now().toString(),
       pocketId,
       amount: value,
       month,
       createdAt: new Date().toISOString(),
-    });
+    };
+
+    // ✅ WRITE VIA STORE
+    await expenseStore.addExpense(expense);
 
     navigation.goBack();
   };
