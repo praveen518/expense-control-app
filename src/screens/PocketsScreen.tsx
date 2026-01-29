@@ -31,18 +31,21 @@ export const PocketsScreen = ({ navigation }: any) => {
   return unsubscribe;
 }, [navigation]);
 
-  const renderItem = ({ item }: { item: Pocket }) => {
-    const remaining = item.allocated - item.spent;
+  const renderItem = ({ item }: { item: Pocket }) => (
+  <Pressable
+    onPress={() =>
+      navigation.navigate('PocketDetail', {
+        pocketId: item.id,
+      })
+    }
+    style={styles.row}
+  >
+    <Text style={styles.name}>{item.name}</Text>
+    <Text>{formatINR(item.allocated - item.spent)}</Text>
+  </Pressable>
+);
 
-    return (
-      <View style={styles.pocket}>
-        <Text style={styles.name}>{item.name}</Text>
-        <Text style={styles.amount}>
-          {formatINR(remaining)} left
-        </Text>
-      </View>
-    );
-  };
+
 
   return (
   <View>
@@ -105,5 +108,12 @@ remainingBanner: {
   color: '#0f172a',
   fontWeight: '600',
 },
-
+row: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  paddingVertical: 12,
+  paddingHorizontal: 4,
+  borderBottomWidth: 1,
+  borderBottomColor: '#e5e7eb',
+},
 });
