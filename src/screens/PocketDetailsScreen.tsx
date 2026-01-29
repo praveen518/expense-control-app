@@ -10,6 +10,8 @@ import { Pocket } from '../types/pocket';
 import { getPockets, savePockets } from '../storage/pocketStorage';
 import { addExpense } from '../storage/expenseStorage';
 import { applyExpenseToPocket } from '../utils/pocketSpending';
+import { getCurrentMonth } from '../utils/month';
+
 
 export const PocketDetailScreen = ({ route, navigation }: any) => {
   const { pocketId } = route.params;
@@ -35,11 +37,12 @@ export const PocketDetailScreen = ({ route, navigation }: any) => {
 
     // 1️⃣ Save expense
     await addExpense({
-      id: Date.now().toString(),
-      pocketId,
-      amount: value,
-      createdAt: new Date().toISOString(),
-    });
+  id: Date.now().toString(),
+  pocketId,
+  amount: value,
+  month: getCurrentMonth(),
+  createdAt: new Date().toISOString(),
+});
 
     // 2️⃣ Update pocket spent
     const pockets = await getPockets();

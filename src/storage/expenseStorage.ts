@@ -15,3 +15,11 @@ export const addExpense = async (expense: Expense) => {
     JSON.stringify([...expenses, expense])
   );
 };
+
+export const getExpensesByMonth = async (
+  month: string
+) => {
+  const expenses = await getExpenses();
+  return expenses.filter((e) => e.month === month);
+};
+
