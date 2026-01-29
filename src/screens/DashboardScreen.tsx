@@ -1,43 +1,54 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { getPockets } from '../storage/pocketStorage';
+import { getExpenses } from '../storage/expenseStorage';
 import { Pocket } from '../types/pocket';
+import { Expense } from '../types/expense';
 import { formatINR } from '../utils/currency';
-import {
-  getRemainingAmount,
-  getHealthStatus,
-} from '../utils/pocketHealth';
+import { getCurrentMonth } from '../utils/month';
+import { getSpentForPocketInMonth } from '../utils/expenseMath';
+import { getHealthStatus } from '../utils/pocketHealth';
 
 export const DashboardScreen = ({ navigation }: any) => {
   const [pockets, setPockets] = useState<Pocket[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   useEffect(() => {
     const load = async () => {
-      const data = await getPockets();
-      setPockets(data);
+      const pocketsData = await getPockets();
+      const expensesData = await getExpenses();
+
+      setPockets(pocketsData);
+      setExpenses(expensesData);
     };
 
     load();
   }, []);
 
+  const currentMonth = getCurrentMonth();
+
   const attentionPockets = pockets.filter((p) => {
-    const status = getHealthStatus(p);
+    const spent = getSpentForPocketInMonth(
+      expenses,
+      p.id,
+      currentMonth
+    );
+    const remaining = p.allocated - spent;
+    const status = getHealthStatus({
+      ...p,
+      spent,
+    });
+
     return status === 'critical' || status === 'warning';
   });
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'safe':
-        return '🟢 Safe';
-      case 'warning':
-        return '🟡 Almost used';
-      case 'critical':
-        return '🔴 Critical';
-      case 'overspent':
-        return '🔴 Over limit';
-      default:
-        return '';
-    }
+  const getStatusLabel = (remaining: number, allocated: number) => {
+    const pct = remaining / allocated;
+
+    if (pct < 0) return '🔴 Over limit';
+    if (pct < 0.1) return '🔴 Critical';
+    if (pct < 0.3) return '🟡 Almost used';
+    return '🟢 Safe';
   };
 
   return (
@@ -51,22 +62,31 @@ export const DashboardScreen = ({ navigation }: any) => {
             ⚠️ Needs Attention ({attentionPockets.length})
           </Text>
 
-          {attentionPockets.map((pocket) => (
-            <Pressable
-    key={pocket.id}
-    style={styles.row}
-    onPress={() =>
-      navigation.navigate('PocketDetail', {
-        pocketId: pocket.id,
-      })
-    }
-  >
-    <Text style={styles.name}>{pocket.name}</Text>
-    <Text style={styles.amount}>
-      {formatINR(getRemainingAmount(pocket))} left
-    </Text>
-  </Pressable>
-          ))}
+          {attentionPockets.map((pocket) => {
+            const spent = getSpentForPocketInMonth(
+              expenses,
+              pocket.id,
+              currentMonth
+            );
+            const remaining = pocket.allocated - spent;
+
+            return (
+              <Pressable
+                key={pocket.id}
+                style={styles.row}
+                onPress={() =>
+                  navigation.navigate('PocketDetail', {
+                    pocketId: pocket.id,
+                  })
+                }
+              >
+                <Text style={styles.name}>{pocket.name}</Text>
+                <Text style={styles.amount}>
+                  {formatINR(remaining)} left
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       )}
 
@@ -80,21 +100,31 @@ export const DashboardScreen = ({ navigation }: any) => {
           </Text>
         ) : (
           pockets.map((pocket) => {
-            const status = getHealthStatus(pocket);
+            const spent = getSpentForPocketInMonth(
+              expenses,
+              pocket.id,
+              currentMonth
+            );
+            const remaining = pocket.allocated - spent;
 
             return (
               <Pressable
-    key={pocket.id}
-    style={styles.row}
-    onPress={() =>
-      navigation.navigate('PocketDetail', {
-        pocketId: pocket.id,
-      })
-    }
-  >
-    <Text style={styles.name}>{pocket.name}</Text>
-    <Text>{getStatusLabel(status)}</Text>
-  </Pressable>
+                key={pocket.id}
+                style={styles.row}
+                onPress={() =>
+                  navigation.navigate('PocketDetail', {
+                    pocketId: pocket.id,
+                  })
+                }
+              >
+                <Text style={styles.name}>{pocket.name}</Text>
+                <Text>
+                  {getStatusLabel(
+                    remaining,
+                    pocket.allocated
+                  )}
+                </Text>
+              </Pressable>
             );
           })
         )}
@@ -123,14 +153,17 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
   name: {
     fontSize: 15,
+    fontWeight: '500',
   },
   amount: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   empty: {
     color: '#64748b',

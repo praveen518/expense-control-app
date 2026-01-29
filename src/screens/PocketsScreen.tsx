@@ -1,119 +1,118 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Pressable,
+} from 'react-native';
 import { getPockets } from '../storage/pocketStorage';
+import { getExpenses } from '../storage/expenseStorage';
 import { Pocket } from '../types/pocket';
+import { Expense } from '../types/expense';
 import { formatINR } from '../utils/currency';
-import { getSalary } from '../storage/salaryStorage';
-import { getRemainingSalary } from '../utils/salary';
-
+import { getCurrentMonth } from '../utils/month';
+import { getSpentForPocketInMonth } from '../utils/expenseMath';
 
 export const PocketsScreen = ({ navigation }: any) => {
   const [pockets, setPockets] = useState<Pocket[]>([]);
-  const [remaining, setRemaining] = useState<number | null>(null);
-
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   useEffect(() => {
-  const load = async () => {
-  const pocketsData = await getPockets();
-  const salaryData = await getSalary();
+    const load = async () => {
+      const pocketsData = await getPockets();
+      const expensesData = await getExpenses();
 
-  setPockets(pocketsData);
+      setPockets(pocketsData);
+      setExpenses(expensesData);
+    };
 
-  if (salaryData) {
-    setRemaining(
-      getRemainingSalary(salaryData.monthly, pocketsData)
+    const unsubscribe = navigation.addListener('focus', load);
+    load();
+
+    return unsubscribe;
+  }, [navigation]);
+
+  const renderItem = ({ item }: { item: Pocket }) => {
+    const spent = getSpentForPocketInMonth(
+      expenses,
+      item.id,
+      getCurrentMonth()
     );
-  }
-};
 
+    const remaining = item.allocated - spent;
 
-  const unsubscribe = navigation.addListener('focus', load);
-  return unsubscribe;
-}, [navigation]);
-
-  const renderItem = ({ item }: { item: Pocket }) => (
-  <Pressable
-    onPress={() =>
-      navigation.navigate('PocketDetail', {
-        pocketId: item.id,
-      })
-    }
-    style={styles.row}
-  >
-    <Text style={styles.name}>{item.name}</Text>
-    <Text>{formatINR(item.allocated - item.spent)}</Text>
-  </Pressable>
-);
-
-
+    return (
+      <Pressable
+        style={styles.row}
+        onPress={() =>
+          navigation.navigate('PocketDetail', {
+            pocketId: item.id,
+          })
+        }
+      >
+        <Text style={styles.name}>{item.name}</Text>
+        <Text style={styles.amount}>
+          {formatINR(remaining)}
+        </Text>
+      </Pressable>
+    );
+  };
 
   return (
-  <View>
-    {remaining !== null && (
-  <Text style={styles.remainingBanner}>
-    Remaining to allocate: {formatINR(remaining)}
-  </Text>
-)}
+    <View style={styles.container}>
+      {/* Create Pocket */}
+      <Pressable
+        style={styles.addButton}
+        onPress={() => navigation.navigate('CreatePocket')}
+      >
+        <Text style={styles.addText}>+ Create Pocket</Text>
+      </Pressable>
 
-    <Pressable
-      style={styles.addButton}
-      onPress={() => navigation.navigate('CreatePocket')}
-    >
-      <Text style={styles.addText}>+ Create Pocket</Text>
-    </Pressable>
-
-    {pockets.length === 0 ? (
-      <Text style={styles.empty}>No pockets created yet</Text>
-    ) : (
-      <FlatList
-        data={pockets}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-      />
-    )}
-  </View>
-);
+      {pockets.length === 0 ? (
+        <Text style={styles.empty}>
+          No pockets created yet
+        </Text>
+      ) : (
+        <FlatList
+          data={pockets}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+        />
+      )}
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-  pocket: {
+  container: {
     padding: 16,
-    borderRadius: 8,
-    backgroundColor: 'white',
+  },
+  addButton: {
     marginBottom: 12,
   },
-  name: {
+  addText: {
+    color: '#2563eb',
     fontSize: 16,
     fontWeight: '600',
   },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  name: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
   amount: {
-    fontSize: 14,
-    marginTop: 4,
-    color: '#475569',
+    fontSize: 16,
+    fontWeight: '600',
   },
   empty: {
-    padding: 16,
+    marginTop: 12,
     color: '#64748b',
   },
-  addButton: {
-  padding: 12,
-  marginBottom: 12,
-},
-addText: {
-  color: '#2563eb',
-  fontSize: 16,
-},
-remainingBanner: {
-  marginBottom: 8,
-  color: '#0f172a',
-  fontWeight: '600',
-},
-row: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  paddingVertical: 12,
-  paddingHorizontal: 4,
-  borderBottomWidth: 1,
-  borderBottomColor: '#e5e7eb',
-},
 });
