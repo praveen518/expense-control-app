@@ -42,3 +42,15 @@ export const getHealthType = (
   if (ratio <= 0.3) return 'warning';
   return 'safe';
 };
+
+export const getHealthRank = (
+  remaining: number,
+  allocated: number
+): number => {
+  if (remaining < 0) return 0;        // Debt
+  const ratio = remaining / allocated;
+  if (ratio <= 0.1) return 1;         // Critical
+  if (ratio <= 0.3) return 2;         // Warning
+  return 3;                           // Safe
+};
+
