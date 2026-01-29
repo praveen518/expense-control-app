@@ -15,7 +15,7 @@ import { Expense } from '../types/expense';
 import { formatINR } from '../utils/currency';
 import { getCurrentMonth } from '../utils/month';
 import { getSpentForPocketInMonth } from '../utils/expenseMath';
-import { getHealthLabel } from '../utils/pocketHealth';
+import { getHealthLabel, getHealthType } from '../utils/pocketHealth';
 
 export const DashboardScreen = ({ navigation }: any) => {
   const [pockets, setPockets] = useState<Pocket[]>([]);
@@ -46,9 +46,83 @@ export const DashboardScreen = ({ navigation }: any) => {
 
   const currentMonth = getCurrentMonth();
 
+  const attentionPockets = pockets.filter((pocket) => {
+  const spent = getSpentForPocketInMonth(
+    expenses,
+    pocket.id,
+    currentMonth
+  );
+
+  const opening = openingMap[pocket.id] ?? 0;
+
+  const remaining =
+    pocket.allocated + opening - spent;
+
+  const health = getHealthType(
+    remaining,
+    pocket.allocated
+  );
+
+  return health !== 'safe';
+});
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Dashboard</Text>
+      {attentionPockets.length > 0 && (
+  <View style={styles.attentionBox}>
+    <Text style={styles.attentionTitle}>
+      ⚠️ Needs Attention ({attentionPockets.length})
+    </Text>
+
+    {attentionPockets.map((pocket) => {
+      const spent = getSpentForPocketInMonth(
+        expenses,
+        pocket.id,
+        currentMonth
+      );
+
+      const opening = openingMap[pocket.id] ?? 0;
+
+      const remaining =
+        pocket.allocated + opening - spent;
+
+      return (
+        <Pressable
+          key={pocket.id}
+          style={styles.attentionRow}
+          onPress={() =>
+            navigation.navigate('PocketDetail', {
+              pocketId: pocket.id,
+            })
+          }
+        >
+          <View>
+            <Text style={styles.name}>
+              {pocket.name}
+            </Text>
+            <Text style={styles.health}>
+              {getHealthLabel(
+                remaining,
+                pocket.allocated
+              )}
+            </Text>
+          </View>
+
+          <Text
+            style={[
+              styles.amount,
+              remaining < 0 && styles.negative,
+            ]}
+          >
+            {formatINR(remaining)}
+          </Text>
+        </Pressable>
+      );
+    })}
+  </View>
+)}
+
 
       {pockets.map((pocket) => {
         const spent = getSpentForPocketInMonth(
@@ -129,5 +203,21 @@ health: {
   marginTop: 2,
   color: '#64748b',
 },
+attentionBox: {
+  backgroundColor: '#fff7ed',
+  borderRadius: 8,
+  padding: 12,
+  marginBottom: 16,
+},
+attentionTitle: {
+  fontSize: 16,
+  fontWeight: '700',
+  marginBottom: 8,
+},
+attentionRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  paddingVertical: 8,
+}
 
 });

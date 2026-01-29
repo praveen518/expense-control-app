@@ -29,3 +29,16 @@ export const getHealthLabel = (
   if (ratio < 0.3) return '🟡 Warning';
   return '🟢 Safe';
 };
+
+export const getHealthType = (
+  remaining: number,
+  allocated: number
+): 'safe' | 'warning' | 'critical' | 'debt' => {
+  if (remaining < 0) return 'debt';
+
+  const ratio = remaining / allocated;
+
+  if (ratio <= 0.1) return 'critical';
+  if (ratio <= 0.3) return 'warning';
+  return 'safe';
+};
