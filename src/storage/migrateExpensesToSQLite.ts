@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Expense } from '../types/expense';
-import * as expenseSQLite from './expenseSQLite';
+import * as expenseAdapter from '../db/expense.adapter';
 
 const LEGACY_EXPENSES_KEY = 'USER_EXPENSES';
 const MIGRATION_FLAG = 'EXPENSES_SQLITE_MIGRATED';
@@ -17,7 +17,7 @@ export const migrateExpensesToSQLite = async () => {
 
   // 2️⃣ Check if SQLite already has data
   const sqliteExpenses =
-    await expenseSQLite.getExpenses();
+    await expenseAdapter.getExpenses();
 
   if (sqliteExpenses.length > 0) {
     // SQLite is already authoritative
@@ -57,7 +57,7 @@ if (!Array.isArray(legacyExpenses)) {
 
   // 4️⃣ Insert into SQLite
   for (const expense of legacyExpenses) {
-    await expenseSQLite.addExpense(expense);
+    await expenseAdapter.addExpense(expense);
   }
 
   // 5️⃣ Mark migration complete

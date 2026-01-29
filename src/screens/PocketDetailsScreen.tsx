@@ -2,17 +2,15 @@ import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  Button,
   StyleSheet,
-  Alert,
+  Pressable,
 } from 'react-native';
-
-import { getPockets } from '../storage/pocketStorage';
-import { getOpeningBalance } from '../storage/openingBalanceStorage';
 
 import { Pocket } from '../types/pocket';
 import { Expense } from '../types/expense';
+
+import { getPockets } from '../storage/pocketStorage';
+import { getOpeningBalance } from '../storage/openingBalanceStorage';
 
 import { getCurrentMonth } from '../utils/month';
 import { getSpentForPocketInMonth } from '../utils/expenseMath';
@@ -21,12 +19,14 @@ import { formatINR } from '../utils/currency';
 import { useExpenses } from '../hooks/useExpenses';
 import { expenseStore } from '../store/expense/expenseStore.instance';
 
-export const PocketDetailScreen = ({ route, navigation }: any) => {
+import { AddExpenseModal } from '../components/AddExpenseModal';
+
+export const PocketDetailScreen = ({ route }: any) => {
   const { pocketId } = route.params;
 
   const [pocket, setPocket] = useState<Pocket | null>(null);
   const [opening, setOpening] = useState(0);
-  const [amount, setAmount] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
 
   const currentMonth = getCurrentMonth();
 
@@ -74,47 +74,15 @@ export const PocketDetailScreen = ({ route, navigation }: any) => {
   const remaining =
     pocket.allocated + opening - spent;
 
-  const onAddExpense = async () => {
-    const value = Number(amount);
-    if (!value || value <= 0) {
-      alert('Enter a valid amount');
-      return;
-    }
-
-    const expense: Expense = {
-      id: Date.now().toString(),
-      pocketId,
-      amount: value,
-      month: currentMonth,
-      createdAt: new Date().toISOString(),
-    };
-
-    await expenseStore.addExpense(expense);
-    navigation.goBack();
-  };
-
-  const confirmDeleteExpense = (expenseId: string) => {
-    Alert.alert(
-      'Delete expense',
-      'Are you sure you want to delete this expense?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () =>
-            expenseStore.deleteExpense(expenseId),
-        },
-      ]
-    );
+  const deleteExpense = (id: string) => {
+    expenseStore.deleteExpense(id);
   };
 
   return (
     <View style={styles.screen}>
-      <View style={styles.container}>
-        <Text style={styles.title}>
-          {pocket.name}
-        </Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>{pocket.name}</Text>
 
         <Text
           style={[
@@ -124,78 +92,62 @@ export const PocketDetailScreen = ({ route, navigation }: any) => {
         >
           Remaining: {formatINR(remaining)}
         </Text>
-
-        <View style={styles.expenseList}>
-          <Text style={styles.sectionTitle}>
-            Expenses
-          </Text>
-
-          {pocketExpenses.length === 0 ? (
-            <Text style={styles.empty}>
-              No expenses yet
-            </Text>
-          ) : (
-            pocketExpenses.map((e) => (
-              <View
-                key={e.id}
-                style={styles.expenseRow}
-              >
-                <View>
-                  <Text
-                    style={styles.expenseAmount}
-                  >
-                    {formatINR(e.amount)}
-                  </Text>
-                  <Text style={styles.expenseDate}>
-                    {new Date(
-                      e.createdAt
-                    ).toLocaleTimeString()}
-                  </Text>
-                </View>
-
-                <Text
-                  style={styles.delete}
-                  onPress={() =>
-                    confirmDeleteExpense(e.id)
-                  }
-                >
-                  Delete
-                </Text>
-              </View>
-            ))
-          )}
-        </View>
-
-        <TextInput
-          style={styles.input}
-          keyboardType="numeric"
-          placeholder="Expense amount"
-          value={amount}
-          onChangeText={setAmount}
-        />
-
-        <Button
-          title="Add Expense"
-          onPress={onAddExpense}
-        />
       </View>
 
-      {/* ✅ Snackbar-style Undo */}
-      {expenseStore.canUndo() && (
-        <View style={styles.snackbar}>
-          <Text style={styles.snackbarText}>
-            Expense deleted
+      {/* Expense List */}
+      <View style={styles.list}>
+        {pocketExpenses.length === 0 ? (
+          <Text style={styles.empty}>
+            No expenses yet
           </Text>
-          <Text
-            style={styles.snackbarAction}
-            onPress={() =>
-              expenseStore.undoDelete()
-            }
-          >
-            UNDO
-          </Text>
-        </View>
-      )}
+        ) : (
+          pocketExpenses.map((e) => (
+            <View key={e.id} style={styles.row}>
+              <View>
+                <Text style={styles.amount}>
+                  {formatINR(e.amount)}
+                </Text>
+
+                {e.note && (
+                  <Text style={styles.note}>
+                    {e.note}
+                  </Text>
+                )}
+
+                <Text style={styles.time}>
+                  {new Date(e.createdAt).toLocaleTimeString()}
+                </Text>
+              </View>
+
+              <Text
+                style={styles.delete}
+                onPress={() => deleteExpense(e.id)}
+              >
+                Delete
+              </Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      {/* Floating Add Button */}
+      <Pressable
+        style={styles.fab}
+        onPress={() => setAddOpen(true)}
+      >
+        <Text style={styles.fabText}>＋</Text>
+      </Pressable>
+
+      {/* Add Expense Modal */}
+      <AddExpenseModal
+        visible={addOpen}
+        pocketId={pocketId}
+        month={currentMonth}
+        onClose={() => setAddOpen(false)}
+        onSubmit={(expense) =>
+          expenseStore.addExpense(expense)
+        }
+      />
     </View>
   );
 };
@@ -205,8 +157,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  container: {
+  header: {
     padding: 16,
+    borderBottomWidth: 1,
+    borderColor: '#e5e7eb',
   },
 
   title: {
@@ -215,7 +169,7 @@ const styles = StyleSheet.create({
   },
 
   remaining: {
-    marginVertical: 8,
+    marginTop: 6,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -224,44 +178,38 @@ const styles = StyleSheet.create({
     color: '#dc2626',
   },
 
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 12,
-    marginVertical: 16,
-    borderRadius: 6,
-  },
-
-  expenseList: {
-    marginTop: 24,
-  },
-
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
+  list: {
+    padding: 16,
   },
 
   empty: {
     color: '#6b7280',
+    fontSize: 14,
   },
 
-  expenseRow: {
+  row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderColor: '#e5e7eb',
   },
 
-  expenseAmount: {
+  amount: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
   },
 
-  expenseDate: {
+  note: {
     fontSize: 12,
     color: '#6b7280',
+    marginTop: 2,
+  },
+
+  time: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 2,
   },
 
   delete: {
@@ -270,39 +218,22 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
 
-  /* 🔥 Snackbar styles */
-  snackbar: {
+  fab: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 24,
-
-    backgroundColor: '#111827',
-    borderRadius: 8,
-
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-
-    flexDirection: 'row',
+    right: 20,
+    bottom: 20,
+    backgroundColor: '#2563eb',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
-    justifyContent: 'space-between',
-
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    justifyContent: 'center',
     elevation: 6,
   },
 
-  snackbarText: {
-    color: '#f9fafb',
-    fontSize: 14,
-  },
-
-  snackbarAction: {
-    color: '#22c55e',
-    fontSize: 14,
-    fontWeight: '700',
-    padding: 8,
+  fabText: {
+    color: '#fff',
+    fontSize: 28,
+    marginTop: -2,
   },
 });

@@ -1,5 +1,5 @@
 import { Expense } from '../../types/expense';
-import * as expenseStorage from '../../storage/expenseSQLite';
+import * as expenseStorage from '../../db/expense.adapter';
 
 /**
  * ExpenseStore
@@ -8,20 +8,19 @@ import * as expenseStorage from '../../storage/expenseSQLite';
  *  - Supports soft delete + undo
  */
 export class ExpenseStore {
-  /** in-memory state */
   private expenses = new Map<string, Expense>();
   private listeners = new Set<() => void>();
-
-  /** cached snapshot for useSyncExternalStore */
   private snapshot: Expense[] = [];
 
-  /** undo state */
   private lastDeleted: Expense | null = null;
   private canUndoDelete = false;
-  private undoTimer: ReturnType<typeof setTimeout> | null =
-    null;
+  private undoTimer: ReturnType<typeof setTimeout> | null = null;
 
   private readonly UNDO_WINDOW_MS = 5000;
+  private undoSnapshot = {
+  canUndo: false,
+  lastDeleted: null as Expense | null,
+};
 
   /* =========================
      React subscription
@@ -29,115 +28,110 @@ export class ExpenseStore {
 
   subscribe(listener: () => void) {
     this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return () => this.listeners.delete(listener);
   }
 
   private emit() {
-    // snapshot changes ONLY here
-    this.snapshot = Array.from(this.expenses.values());
-    for (const l of this.listeners) l();
-  }
+  console.log(
+    '🟢 EMIT',
+    'canUndo:',
+    this.canUndoDelete,
+    'lastDeleted:',
+    this.lastDeleted?.id
+  );
 
-  getSnapshot(): Expense[] {
+  this.snapshot = Array.from(this.expenses.values());
+  this.undoSnapshot.canUndo = this.canUndoDelete;
+  this.undoSnapshot.lastDeleted = this.lastDeleted;
+
+  for (const l of this.listeners) l();
+}
+
+
+  getUndoSnapshot() {
+  return this.undoSnapshot;
+}
+
+  getSnapshot() {
     return this.snapshot;
   }
 
   /* =========================
-     Init
+     Hydration
      ========================= */
 
-  async init() {
-    const storedExpenses =
-      await expenseStorage.getExpenses();
+  hydrateFromSQLite() {
+  const prevLastDeleted = this.lastDeleted;
+  const prevCanUndo = this.canUndoDelete;
 
-    this.expenses.clear();
-    for (const e of storedExpenses) {
-      this.expenses.set(e.id, e);
-    }
+  const active = expenseStorage.getActiveExpenses();
+  const deleted = expenseStorage.getDeletedExpenses();
 
-    this.emit();
+  this.expenses.clear();
+  for (const e of [...active, ...deleted]) {
+    this.expenses.set(e.id, e);
   }
 
-  /* =========================
-     READ helpers
-     ========================= */
+  // 🔒 Preserve undo state
+  this.lastDeleted = prevLastDeleted;
+  this.canUndoDelete = prevCanUndo;
 
-  canUndo() {
-    return this.canUndoDelete;
-  }
+  this.emit();
+}
+
 
   /* =========================
      WRITE operations
      ========================= */
 
-  async addExpense(expense: Expense) {
-    await expenseStorage.addExpense(expense);
-
+  addExpense(expense: Expense) {
+    expenseStorage.addExpense(expense);
     this.expenses.set(expense.id, expense);
     this.emit();
   }
 
-  /**
-   * Soft delete with undo support
-   */
-  async deleteExpense(expenseId: string) {
+  deleteExpense(expenseId: string) {
     const expense = this.expenses.get(expenseId);
     if (!expense || expense.deletedAt) return;
 
-    // clear previous undo (single-level undo)
     if (this.undoTimer) {
       clearTimeout(this.undoTimer);
       this.undoTimer = null;
     }
 
     const deletedAt = new Date().toISOString();
+    const deletedExpense = { ...expense, deletedAt };
 
-    const deletedExpense: Expense = {
-      ...expense,
-      deletedAt,
-    };
-
-    // register undo
     this.lastDeleted = expense;
     this.canUndoDelete = true;
 
-    // persist soft delete
-    await expenseStorage.softDeleteExpense(
+    expenseStorage.softDeleteExpense(
       expenseId,
       deletedAt
     );
 
-    // update memory
     this.expenses.set(expenseId, deletedExpense);
     this.emit();
 
-    // start undo expiry
     this.undoTimer = setTimeout(() => {
       this.lastDeleted = null;
       this.canUndoDelete = false;
       this.undoTimer = null;
-      this.emit(); // 🔥 critical
+      this.emit();
     }, this.UNDO_WINDOW_MS);
   }
 
-  /**
-   * Undo last delete (time-bound)
-   */
-  async undoDelete() {
+  undoDelete() {
     if (!this.lastDeleted) return;
 
-    const restored: Expense = {
-      ...this.lastDeleted,
-      deletedAt: undefined,
-    };
-
-    await expenseStorage.restoreExpense(
-      restored.id
+    expenseStorage.restoreExpense(
+      this.lastDeleted.id
     );
 
-    this.expenses.set(restored.id, restored);
+    this.expenses.set(
+      this.lastDeleted.id,
+      { ...this.lastDeleted, deletedAt: undefined }
+    );
 
     this.lastDeleted = null;
     this.canUndoDelete = false;
@@ -150,22 +144,35 @@ export class ExpenseStore {
     this.emit();
   }
 
-  /**
-   * Restore from Recently Deleted screen
-   * (not time-bound)
-   */
-  async restoreExpense(expenseId: string) {
+  restoreExpense(expenseId: string) {
     const expense = this.expenses.get(expenseId);
     if (!expense || !expense.deletedAt) return;
 
-    const restored: Expense = {
-      ...expense,
-      deletedAt: undefined,
-    };
+    expenseStorage.restoreExpense(expenseId);
 
-    await expenseStorage.restoreExpense(expenseId);
+    this.expenses.set(
+      expenseId,
+      { ...expense, deletedAt: undefined }
+    );
 
-    this.expenses.set(expenseId, restored);
     this.emit();
   }
+
+  getLastDeleted(): Expense | null {
+  return this.lastDeleted;
 }
+
+  canUndo() {
+  return this.canUndoDelete;
+}
+
+getCanUndoSnapshot() {
+  return this.canUndoDelete;
+}
+
+getLastDeletedExpense() {
+  return this.lastDeleted;
+}
+
+}
+
