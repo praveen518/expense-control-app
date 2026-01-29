@@ -1,13 +1,11 @@
 import React from 'react';
-import { AppLayout } from '../components/AppLayout';
+import { NavigationContainer } from '@react-navigation/native';
 import { AppNavigator } from '../navigation/AppNavigator';
 
-const App = () => {
+export default function App() {
   return (
-    <AppLayout>
+    <NavigationContainer>
       <AppNavigator />
-    </AppLayout>
+    </NavigationContainer>
   );
-};
-
-export default App;
+}
