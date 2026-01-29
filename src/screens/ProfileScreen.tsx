@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { getSalary } from '../storage/salaryStorage';
 import { formatINR } from '../utils/currency';
 import { getPockets } from '../storage/pocketStorage';
-import { getRemainingSalary, getTotalAllocated } from '../utils/salary';
+import { getTotalAllocated } from '../utils/salary';
 
 export const ProfileScreen = ({ navigation }: any) => {
   const [salary, setSalary] = useState<number | null>(null);
@@ -42,8 +42,8 @@ export const ProfileScreen = ({ navigation }: any) => {
   </>
 )}
 
-    <Pressable onPress={() => navigation.navigate('Pockets')}>
-        <Text style={styles.link}>View Pockets</Text>
+    <Pressable onPress={() => navigation.navigate('RecentlyDeleted')}>
+        <Text style={styles.link}>Recently Deleted</Text>
     </Pressable>
       <Pressable onPress={() => navigation.navigate('Settings')}>
         <Text style={styles.link}>Go to Settings</Text>

@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ChangeSalaryScreen } from '../screens/ChangeSalaryScreen';
+import { RecentlyDeletedScreen } from '../screens/RecentlyDeletedScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -20,10 +21,16 @@ export const ProfileStack = () => {
         options={{ title: 'Settings' }}
       />
       <Stack.Screen
+  name="RecentlyDeleted"
+  component={RecentlyDeletedScreen}
+  options={{ title: 'Recently Deleted' }}
+/>
+      <Stack.Screen
         name="ChangeSalary"
         component={ChangeSalaryScreen}
         options={{ title: 'Change Salary' }}
       />
+
     </Stack.Navigator>
   );
 };

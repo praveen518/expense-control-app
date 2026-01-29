@@ -4,4 +4,5 @@ export type Expense = {
   amount: number;
   month: string;
   createdAt: string;
+  deletedAt?: string; 
 };

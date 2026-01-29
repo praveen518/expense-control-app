@@ -7,7 +7,7 @@ export const getSpentForPocketInMonth = (
 ): number => {
   return expenses
     .filter(
-      (e) => e.pocketId === pocketId && e.month === month
+      (e) => e.pocketId === pocketId && e.month === month && !e.deletedAt
     )
     .reduce((sum, e) => sum + e.amount, 0);
 };
