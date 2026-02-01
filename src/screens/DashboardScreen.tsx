@@ -1,221 +1,205 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
 } from 'react-native';
+import { useSyncExternalStore } from 'react';
 
-import { getPockets } from '../storage/pocketStorage';
-import { getOpeningBalance } from '../storage/openingBalanceStorage';
+import { expenseStore } from '../store/expense/expenseStore.instance';
+import { pocketStore } from '../store/pocket/pocketStore.instance';
 
-import { Pocket } from '../types/pocket';
-import { Expense } from '../types/expense';
-
-import { formatINR } from '../utils/currency';
-import { getCurrentMonth } from '../utils/month';
-import { getSpentForPocketInMonth } from '../utils/expenseMath';
 import {
-  getHealthLabel,
+  currentMonthKey,
+  shiftMonth,
+} from '../utils/monthKey';
+
+import {
   getHealthRank,
 } from '../utils/pocketHealth';
 
-import { useExpenses } from '../hooks/useExpenses';
+import { colors } from '../themes/colors';
+
+/* Dashboard components */
+import { DashboardHeader } from '../components/dashboard/DashboardHeader';
+import { KpiStrip } from '../components/dashboard/KpiStrip';
+import { BurnRateChip } from '../components/dashboard/BurnRateChip';
+import { AttentionPockets } from '../components/dashboard/AttentionPockets';
+import { PocketProgressList } from '../components/dashboard/PocketProgressList';
+import { TopExpenses } from '../components/dashboard/TopExpenses';
 
 export const DashboardScreen = ({ navigation }: any) => {
-  const [pockets, setPockets] = useState<Pocket[]>([]);
-  const [openingMap, setOpeningMap] =
-    useState<Record<string, number>>({});
+  /* =========================
+     Month state
+     ========================= */
 
-  // ✅ EXPENSES NOW COME FROM STORE
-  const expenses: Expense[] = useExpenses();
+  const [month, setMonth] = useState(
+    currentMonthKey()
+  );
 
-  useEffect(() => {
-    const load = async () => {
-      const pocketsData = await getPockets();
-      const month = getCurrentMonth();
+  /* =========================
+     Store subscriptions
+     ========================= */
 
-      const openings: Record<string, number> = {};
-      for (const pocket of pocketsData) {
-        openings[pocket.id] = await getOpeningBalance(
-          month,
-          pocket.id
-        );
-      }
+  const expenseSummary = useSyncExternalStore(
+    expenseStore.subscribe.bind(expenseStore),
+    () => expenseStore.getDashboardSummary(month)
+  );
 
-      setPockets(pocketsData);
-      setOpeningMap(openings);
-    };
+  const pocketSummaries = useSyncExternalStore(
+    pocketStore.subscribe.bind(pocketStore),
+    () => pocketStore.getAllPocketSummaries(month)
+  );
 
-    load();
-  }, []);
+  const topExpenses = useSyncExternalStore(
+  expenseStore.subscribe.bind(expenseStore),
+  () =>
+    expenseStore.getTopExpenseSummariesForMonth(
+      month,
+      3
+    )
+);
 
-  const currentMonth = getCurrentMonth();
+  /* =========================
+     Derived view data
+     ========================= */
 
-  // 🔥 Attention logic with severity sorting
-  const attentionPockets = pockets
-    .map((pocket) => {
-      const spent = getSpentForPocketInMonth(
-        expenses,
-        pocket.id,
-        currentMonth
-      );
-
-      const opening = openingMap[pocket.id] ?? 0;
-
-      const remaining =
-        pocket.allocated + opening - spent;
-
-      return {
-        pocket,
-        remaining,
-        rank: getHealthRank(
-          remaining,
-          pocket.allocated
-        ),
-      };
-    })
-    .filter((item) => item.rank < 3) // exclude safe
+  const attentionPockets = pocketSummaries
+    .map(({ pocket, allocated, remaining }) => ({
+      pocket,
+      allocated,
+      remaining,
+      rank: getHealthRank(remaining, allocated),
+    }))
+    .filter(item => item.rank < 3)
     .sort((a, b) => a.rank - b.rank);
+
+  /* =========================
+     Render
+     ========================= */
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Dashboard</Text>
-
-      {/* ⚠️ Attention Section */}
-      {attentionPockets.length > 0 && (
-        <View style={styles.attentionBox}>
-          <Text style={styles.attentionTitle}>
-            ⚠️ Needs Attention ({attentionPockets.length})
-          </Text>
-
-          {attentionPockets.map(
-            ({ pocket, remaining }) => (
-              <Pressable
-                key={pocket.id}
-                style={styles.attentionRow}
-                onPress={() =>
-                  navigation.navigate('PocketDetail', {
-                    pocketId: pocket.id,
-                  })
-                }
-              >
-                <View>
-                  <Text style={styles.name}>
-                    {pocket.name}
-                  </Text>
-                  <Text style={styles.health}>
-                    {getHealthLabel(
-                      remaining,
-                      pocket.allocated
-                    )}
-                  </Text>
-                </View>
-
-                <Text
-                  style={[
-                    styles.amount,
-                    remaining < 0 && styles.negative,
-                  ]}
-                >
-                  {formatINR(remaining)}
-                </Text>
-              </Pressable>
+      {/* =========================
+          Month switcher
+         ========================= */}
+      <View style={styles.monthRow}>
+        <Pressable
+          onPress={() =>
+            setMonth(prev =>
+              shiftMonth(prev, -1)
             )
-          )}
-        </View>
-      )}
+          }
+        >
+          <Text style={styles.monthNav}>
+            ◀
+          </Text>
+        </Pressable>
 
-      {/* 📋 All Pockets */}
-      {pockets.map((pocket) => {
-        const spent = getSpentForPocketInMonth(
-          expenses,
-          pocket.id,
-          currentMonth
-        );
+        <Text style={styles.monthText}>
+          {month}
+        </Text>
 
-        const opening = openingMap[pocket.id] ?? 0;
+        <Pressable
+          onPress={() =>
+            setMonth(prev =>
+              shiftMonth(prev, 1)
+            )
+          }
+        >
+          <Text style={styles.monthNav}>
+            ▶
+          </Text>
+        </Pressable>
+      </View>
 
-        const remaining =
-          pocket.allocated + opening - spent;
+      {/* =========================
+          Header
+         ========================= */}
+      <DashboardHeader
+        totalIncome={expenseSummary.totalIncome}
+        totalSpent={expenseSummary.totalSpent}
+        netAmount={expenseSummary.netAmount}
+      />
 
-        return (
-          <Pressable
-            key={pocket.id}
-            style={styles.row}
-            onPress={() =>
-              navigation.navigate('PocketDetail', {
-                pocketId: pocket.id,
-              })
-            }
-          >
-            <Text style={styles.name}>
-              {pocket.name}
-            </Text>
-            <Text
-              style={[
-                styles.amount,
-                remaining < 0 && styles.negative,
-              ]}
-            >
-              {formatINR(remaining)}
-            </Text>
-          </Pressable>
-        );
-      })}
+      {/* =========================
+          KPI strip
+         ========================= */}
+      <KpiStrip
+        spent={expenseSummary.totalSpent}
+        remaining={expenseSummary.netAmount}
+        avgPerDay={expenseSummary.avgPerDay}
+      />
+
+      {/* =========================
+          Burn rate
+         ========================= */}
+      <BurnRateChip
+        daysRemaining={
+          expenseSummary.daysRemaining
+        }
+        perDayAvailable={
+          expenseSummary.perDayAvailable
+        }
+      />
+
+      <TopExpenses items={topExpenses} />
+
+      {/* =========================
+          Needs attention
+         ========================= */}
+      <AttentionPockets
+        items={attentionPockets}
+        onPressPocket={pocketId =>
+          navigation.navigate(
+            'PocketDetail',
+            { pocketId }
+          )
+        }
+      />
+
+      {/* =========================
+          Pockets
+         ========================= */}
+      <PocketProgressList
+        pockets={pocketSummaries}
+        onPressPocket={pocketId =>
+          navigation.navigate(
+            'PocketDetail',
+            { pocketId }
+          )
+        }
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: colors.background,
     padding: 16,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
+
+  /* Month switcher */
+  monthRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 12,
+    gap: 16,
   },
 
-  /* Attention */
-  attentionBox: {
-    backgroundColor: '#fff7ed',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  attentionTitle: {
+  monthText: {
     fontSize: 16,
     fontWeight: '700',
-    marginBottom: 8,
-  },
-  attentionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  health: {
-    fontSize: 12,
-    color: '#475569',
+    color: colors.textPrimary,
   },
 
-  /* Common rows */
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  name: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  amount: {
-    fontSize: 15,
+  monthNav: {
+    fontSize: 18,
     fontWeight: '700',
-  },
-  negative: {
-    color: '#dc2626',
+    color: colors.primary,
   },
 });

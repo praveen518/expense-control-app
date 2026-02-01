@@ -4,6 +4,7 @@ import { ProfileScreen } from '../screens/ProfileScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ChangeSalaryScreen } from '../screens/ChangeSalaryScreen';
 import { RecentlyDeletedScreen } from '../screens/RecentlyDeletedScreen';
+import { AddIncomeScreen } from '../screens/AddIncomeScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -30,6 +31,10 @@ export const ProfileStack = () => {
         component={ChangeSalaryScreen}
         options={{ title: 'Change Salary' }}
       />
+      <Stack.Screen
+  name="AddIncome"
+  component={AddIncomeScreen}
+/>
 
     </Stack.Navigator>
   );

@@ -4,100 +4,156 @@ import { DB_NAME } from './db';
 import { Expense } from '../types/expense';
 
 /**
- * READ: all expenses
+ * INSERT
+ * Raw insert only. No defaults, no logic.
  */
-export const getExpenses = (): Expense[] => {
-  const result = QuickSQLite.execute(
-    DB_NAME,
-    'SELECT * FROM expenses'
-  );
-
-  return normalizeRows<Expense>(result.rows);
-};
-
-
-/**
- * WRITE: add expense
- */
-export const addExpense = (expense: Expense) => {
+export const insertExpenseRow = (expense: Expense) => {
   QuickSQLite.execute(
     DB_NAME,
     `
-    INSERT INTO expenses
-      (id, pocketId, amount, month, createdAt, deletedAt, note)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO expenses (
+      id,
+      pocketId,
+      amount,
+      month,
+      date,
+      createdAt,
+      updatedAt,
+      deletedAt,
+      isDeleted,
+      note
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       expense.id,
       expense.pocketId,
-      expense.amount,
+      expense.amount,          // signed
       expense.month,
+      expense.date ?? expense.createdAt,
       expense.createdAt,
+      expense.updatedAt ?? null,
       expense.deletedAt ?? null,
-      expense.note ?? null
+      expense.deletedAt ? 1 : 0,
+      expense.note ?? null,
     ]
   );
 };
 
 /**
- * WRITE: soft delete
+ * UPDATE
+ * Used when editing an expense (amount, note, pocket, date, etc.)
  */
-export const softDeleteExpense = (
-  expenseId: string,
-  deletedAt: string
+export const updateExpenseRow = (
+  id: string,
+  fields: Partial<Expense>
 ) => {
+  const columns: string[] = [];
+  const values: any[] = [];
+
+  for (const [key, value] of Object.entries(fields)) {
+    columns.push(`${key} = ?`);
+    values.push(value);
+  }
+
+  if (columns.length === 0) return;
+
   QuickSQLite.execute(
     DB_NAME,
-    'UPDATE expenses SET deletedAt = ? WHERE id = ?',
-    [deletedAt, expenseId]
+    `
+    UPDATE expenses
+    SET ${columns.join(', ')},
+        updatedAt = ?
+    WHERE id = ?
+    `,
+    [...values, Date.now(), id]
   );
 };
 
 /**
- * WRITE: restore expense
+ * SOFT DELETE
  */
-export const restoreExpense = (expenseId: string) => {
+export const markExpenseDeleted = (
+  id: string,
+  deletedAt: number
+) => {
   QuickSQLite.execute(
     DB_NAME,
-    'UPDATE expenses SET deletedAt = NULL WHERE id = ?',
-    [expenseId]
+    `
+    UPDATE expenses
+    SET
+      deletedAt = ?,
+      isDeleted = 1,
+      updatedAt = ?
+    WHERE id = ?
+    `,
+    [deletedAt, deletedAt, id]
   );
 };
 
-export const getActiveExpenses = (): Expense[] => {
+/**
+ * RESTORE (undo delete)
+ */
+export const restoreExpenseRow = (id: string) => {
+  QuickSQLite.execute(
+    DB_NAME,
+    `
+    UPDATE expenses
+    SET
+      deletedAt = NULL,
+      isDeleted = 0,
+      updatedAt = ?
+    WHERE id = ?
+    `,
+    [Date.now(), id]
+  );
+};
+
+/**
+ * HARD DELETE (used only by cleanup jobs)
+ */
+export const permanentlyDeleteExpenseRow = (id: string) => {
+  QuickSQLite.execute(
+    DB_NAME,
+    `DELETE FROM expenses WHERE id = ?`,
+    [id]
+  );
+};
+
+/**
+ * RAW READ
+ * Store decides what to do with this.
+ */
+export const selectAllExpensesRaw = (): Expense[] => {
+  const res = QuickSQLite.execute(
+    DB_NAME,
+    `SELECT * FROM expenses`
+  );
+
+  return normalizeRows<Expense>(res.rows);
+};
+
+/**
+ * RAW READ (useful for cleanup jobs)
+ */
+export const selectDeletedExpensesRaw = (): Expense[] => {
   const res = QuickSQLite.execute(
     DB_NAME,
     `
     SELECT * FROM expenses
-    WHERE deletedAt IS NULL
-    ORDER BY createdAt DESC
+    WHERE isDeleted = 1
     `
   );
 
-  if (!res.rows) return [];
-  return Array.from({ length: res.rows.length }, (_, i) =>
-    res.rows!.item(i) as Expense
-  );
+  return normalizeRows<Expense>(res.rows);
 };
 
-export const getDeletedExpenses = (): Expense[] => {
-  const res = QuickSQLite.execute(
-    DB_NAME,
-    `
-    SELECT * FROM expenses
-    WHERE deletedAt IS NOT NULL
-    ORDER BY deletedAt DESC
-    `
-  );
+/* ------------------ utils ------------------ */
 
-  if (!res.rows) return [];
-  return Array.from({ length: res.rows.length }, (_, i) =>
-    res.rows!.item(i) as Expense
-  );
-};
-
-
-function normalizeRows<T>(rows?: { length: number; item: (i: number) => T }): T[] {
+function normalizeRows<T>(
+  rows?: { length: number; item: (i: number) => T }
+): T[] {
   if (!rows) return [];
-  return Array.from({ length: rows.length }, (_, i) => rows.item(i));
+  return Array.from({ length: rows.length }, (_, i) =>
+    rows.item(i)
+  );
 }

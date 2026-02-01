@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -6,78 +6,63 @@ import {
   FlatList,
   Pressable,
 } from 'react-native';
+import { useSyncExternalStore } from 'react';
 
-import { getPockets } from '../storage/pocketStorage';
-import {
-  getOpeningBalance,
-} from '../storage/openingBalanceStorage';
-
-import { Pocket } from '../types/pocket';
-import { Expense } from '../types/expense';
+import { pocketStore } from '../store/pocket/pocketStore.instance';
 
 import { formatINR } from '../utils/currency';
 import { getCurrentMonth } from '../utils/month';
-import { getSpentForPocketInMonth } from '../utils/expenseMath';
-
-import { useExpenses } from '../hooks/useExpenses';
+import { colors } from '../themes/colors';
 
 export const PocketsScreen = ({ navigation }: any) => {
-  const [pockets, setPockets] = useState<Pocket[]>([]);
-  const [openingMap, setOpeningMap] =
-    useState<Record<string, number>>({});
+  /* =========================
+     Month context
+     ========================= */
 
-  // ✅ EXPENSES FROM STORE
-  const expenses: Expense[] = useExpenses();
+  const currentMonth = getCurrentMonth();
 
-  useEffect(() => {
-    const load = async () => {
-      const p = await getPockets();
-      const month = getCurrentMonth();
+  /* =========================
+     Store subscription
+     ========================= */
 
-      const openings: Record<string, number> = {};
-      for (const pocket of p) {
-        openings[pocket.id] = await getOpeningBalance(
-          month,
-          pocket.id
-        );
-      }
+  const pocketSummaries = useSyncExternalStore(
+    pocketStore.subscribe.bind(pocketStore),
+    () => pocketStore.getAllPocketSummaries(currentMonth)
+  );
 
-      setPockets(p);
-      setOpeningMap(openings);
+  /* =========================
+     Render
+     ========================= */
+
+  const renderItem = ({
+    item,
+  }: {
+    item: {
+      pocket: { id: string; name: string };
+      remaining: number;
     };
-
-    const unsub = navigation.addListener('focus', load);
-    load();
-
-    return unsub;
-  }, [navigation]);
-
-  const renderItem = ({ item }: { item: Pocket }) => {
-    const spent = getSpentForPocketInMonth(
-      expenses,
-      item.id,
-      getCurrentMonth()
-    );
-
-    const opening = openingMap[item.id] ?? 0;
-
-    const remaining =
-      item.allocated + opening - spent;
+  }) => {
+    const { pocket, remaining } = item;
 
     return (
       <Pressable
         style={styles.row}
         onPress={() =>
           navigation.navigate('PocketDetail', {
-            pocketId: item.id,
+            pocketId: pocket.id,
           })
         }
       >
-        <Text style={styles.name}>{item.name}</Text>
+        <Text style={styles.name}>
+          {pocket.name}
+        </Text>
+
         <Text
           style={[
             styles.amount,
-            remaining < 0 && styles.negative,
+            remaining < 0
+              ? styles.negative
+              : styles.positive,
           ]}
         >
           {formatINR(remaining)}
@@ -99,14 +84,14 @@ export const PocketsScreen = ({ navigation }: any) => {
         </Text>
       </Pressable>
 
-      {pockets.length === 0 ? (
+      {pocketSummaries.length === 0 ? (
         <Text style={styles.empty}>
           No pockets created yet
         </Text>
       ) : (
         <FlatList
-          data={pockets}
-          keyExtractor={(i) => i.id}
+          data={pocketSummaries}
+          keyExtractor={(i) => i.pocket.id}
           renderItem={renderItem}
         />
       )}
@@ -115,33 +100,53 @@ export const PocketsScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 16 },
-  addButton: { marginBottom: 12 },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background, // ✅ explicit white
+    padding: 16,
+  },
+
+  addButton: {
+    marginBottom: 12,
+  },
+
   addText: {
-    color: '#2563eb',
+    color: colors.primary, // ✅ accent CTA
     fontSize: 16,
     fontWeight: '600',
   },
+
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: colors.divider,
   },
+
   name: {
     fontSize: 16,
     fontWeight: '500',
+    color: colors.textPrimary,
   },
+
   amount: {
     fontSize: 16,
     fontWeight: '700',
+    color: colors.textPrimary,
   },
+
+  positive: {
+    color: colors.primary,
+  },
+
   negative: {
-    color: '#dc2626',
+    color: colors.danger,
   },
+
   empty: {
     marginTop: 12,
-    color: '#64748b',
+    color: colors.textMuted,
+    fontSize: 14,
   },
 });

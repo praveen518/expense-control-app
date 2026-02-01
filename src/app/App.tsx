@@ -1,32 +1,59 @@
-import React, { useEffect } from 'react';
+// src/app/App.tsx
+import React, { useEffect, useState } from 'react';
+import 'react-native-get-random-values';
 import { NavigationContainer } from '@react-navigation/native';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppNavigator } from '../navigation/AppNavigator';
 import { UndoDeleteBanner } from '../components/UndoDeleteBanner';
+
 import { openDB } from '../db/db';
 import { initExpenseDB } from '../db/schema';
+import { initPocketDB } from '../db/pocket.schema';
 import { migrateExpensesToSQLite } from '../storage/migrateExpensesToSQLite';
+
 import { expenseStore } from '../store/expense/expenseStore.instance';
+import { pocketStore } from '../store/pocket/pocketStore.instance';
+import { loadSettings } from '../store/settingsStore';
+import { ensureSalaryTransaction } from '../finance/ensureSalaryTransaction';
 
 export default function App() {
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
-    openDB();
-    initExpenseDB();
-    migrateExpensesToSQLite();
-    expenseStore.hydrateFromSQLite();
+    async function bootstrap() {
+      // 1️⃣ Settings (salary etc.)
+      await loadSettings();
+
+      // 2️⃣ Database + expenses
+      openDB();
+      initExpenseDB();
+      initPocketDB();
+      await migrateExpensesToSQLite();
+      expenseStore.hydrateFromSQLite();
+      pocketStore.hydrateFromSQLite();
+
+      // 4️⃣ Ensure salary entry exists
+      ensureSalaryTransaction();
+
+      setReady(true);
+    }
+
+    bootstrap();
   }, []);
+
+  if (!ready) {
+    return null; // splash / loader if needed
+  }
 
   return (
     <SafeAreaProvider>
-      {/* 🔑 This is the missing piece */}
       <View style={styles.root}>
         <NavigationContainer>
           <AppNavigator />
         </NavigationContainer>
 
-        {/* 🔴 Overlay that can actually be positioned */}
         <UndoDeleteBanner />
       </View>
     </SafeAreaProvider>
@@ -36,6 +63,6 @@ export default function App() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    position: 'relative', // 🚨 REQUIRED
+    position: 'relative',
   },
 });

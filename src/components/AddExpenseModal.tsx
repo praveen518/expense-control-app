@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { Expense } from '../types/expense';
+import { colors } from '../themes/colors';
 
 interface Props {
   visible: boolean;
@@ -30,17 +31,28 @@ export function AddExpenseModal({
   const [note, setNote] = useState('');
 
   const submit = () => {
-    const value = Number(amount);
-    if (!value || value <= 0) return;
+    const value = Number(
+      amount.replace(/[^0-9]/g, '')
+    );
 
-    onSubmit({
-      id: Date.now().toString(),
+    if (!Number.isFinite(value) || value <= 0) {
+      return;
+    }
+
+    const now = Date.now();
+
+    const expense: Expense = {
+      id: now.toString(),
       pocketId,
-      amount: value,
+      amount: -value, // 🔴 expense = negative
       month,
-      createdAt: new Date().toISOString(),
+      date: now,
+      createdAt: now,
+      isDeleted: false,
       note: note.trim() || undefined,
-    });
+    };
+
+    onSubmit(expense);
 
     setAmount('');
     setNote('');
@@ -55,14 +67,19 @@ export function AddExpenseModal({
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={
+          Platform.OS === 'ios' ? 'padding' : undefined
+        }
         style={styles.overlay}
       >
         <View style={styles.sheet}>
-          <Text style={styles.title}>Add Expense</Text>
+          <Text style={styles.title}>
+            Add Expense
+          </Text>
 
           <TextInput
             placeholder="Amount"
+            placeholderTextColor={colors.textMuted}
             keyboardType="numeric"
             value={amount}
             onChangeText={setAmount}
@@ -72,6 +89,7 @@ export function AddExpenseModal({
 
           <TextInput
             placeholder="Note (optional)"
+            placeholderTextColor={colors.textMuted}
             value={note}
             onChangeText={setNote}
             style={[styles.input, styles.note]}
@@ -80,11 +98,15 @@ export function AddExpenseModal({
 
           <View style={styles.actions}>
             <Pressable onPress={onClose}>
-              <Text style={styles.cancel}>Cancel</Text>
+              <Text style={styles.cancel}>
+                Cancel
+              </Text>
             </Pressable>
 
             <Pressable onPress={submit}>
-              <Text style={styles.add}>Add</Text>
+              <Text style={styles.add}>
+                Add
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -99,38 +121,49 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.3)',
   },
+
   sheet: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     padding: 16,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },
+
   title: {
     fontSize: 18,
     fontWeight: '700',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
+
   input: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
+    borderColor: colors.divider,
+    borderRadius: 10,
     padding: 12,
     marginBottom: 12,
+    fontSize: 16,
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
   },
+
   note: {
     fontSize: 14,
   },
+
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 20,
   },
+
   cancel: {
-    color: '#6b7280',
+    color: colors.textMuted,
     fontSize: 16,
   },
+
   add: {
-    color: '#2563eb',
+    color: colors.primary,
     fontSize: 16,
     fontWeight: '700',
   },

@@ -3,46 +3,34 @@ import {
   View,
   Text,
   TextInput,
-  Button,
+  Pressable,
   StyleSheet,
+  Alert,
 } from 'react-native';
-import { getSalary, saveSalary } from '../storage/salaryStorage';
+
+import { useSalary } from '../hooks/useSettings';
+import { setSalary } from '../store/settingsStore';
+import { colors } from '../themes/colors';
 
 export const ChangeSalaryScreen = ({ navigation }: any) => {
+  const salary = useSalary();
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadSalary = async () => {
-      const data = await getSalary();
-      if (data) {
-        setInput(String(data.monthly));
-      }
-      setLoading(false);
-    };
-
-    loadSalary();
-  }, []);
+    setInput(String(salary || ''));
+  }, [salary]);
 
   const onSave = async () => {
-    const value = Number(input);
+    const value = Number(input.replace(/[^0-9]/g, ''));
 
-    if (!value || value <= 0) {
-      alert('Please enter a valid salary');
+    if (!Number.isFinite(value) || value <= 0) {
+      Alert.alert('Please enter a valid salary');
       return;
     }
 
-    await saveSalary({
-      monthly: value,
-      updatedAt: new Date().toISOString(),
-    });
-
+    await setSalary(value);
     navigation.goBack();
   };
-
-  if (loading) {
-    return <Text style={styles.loading}>Loading...</Text>;
-  }
 
   return (
     <View style={styles.container}>
@@ -53,31 +41,52 @@ export const ChangeSalaryScreen = ({ navigation }: any) => {
         onChangeText={setInput}
         keyboardType="numeric"
         placeholder="Enter monthly salary"
+        placeholderTextColor={colors.textMuted}
         style={styles.input}
       />
 
-      <Button title="Save" onPress={onSave} />
+      <Pressable style={styles.button} onPress={onSave}>
+        <Text style={styles.buttonText}>Save</Text>
+      </Pressable>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: colors.background,
     padding: 16,
   },
+
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
+    color: colors.textPrimary,
     marginBottom: 16,
   },
+
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: colors.divider,
+    backgroundColor: colors.surface,
     padding: 12,
+    borderRadius: 10,
     marginBottom: 16,
-    borderRadius: 6,
+    fontSize: 16,
+    color: colors.textPrimary,
   },
-  loading: {
-    padding: 16,
+
+  button: {
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+
+  buttonText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

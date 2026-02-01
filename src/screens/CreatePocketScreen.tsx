@@ -3,66 +3,42 @@ import {
   View,
   Text,
   TextInput,
-  Button,
+  Pressable,
   StyleSheet,
+  Alert,
 } from 'react-native';
+
 import { Pocket } from '../types/pocket';
-import { getPockets, savePockets } from '../storage/pocketStorage';
-import { getSalary } from '../storage/salaryStorage';
+import { pocketStore } from '../store/pocket/pocketStore.instance';
+import { colors } from '../themes/colors';
 
 export const CreatePocketScreen = ({ navigation }: any) => {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
 
-  const getTotalAllocated = (pockets: Pocket[]) =>
-    pockets.reduce((sum, p) => sum + p.allocated, 0);
-
   const onSave = async () => {
-  const allocated = Number(amount);
+    const allocated = Number(amount.replace(/[^0-9]/g, ''));
 
-  if (!name.trim()) {
-    alert('Pocket name is required');
-    return;
-  }
+    if (!name.trim()) {
+      Alert.alert('Pocket name is required');
+      return;
+    }
 
-  if (!allocated || allocated <= 0) {
-    alert('Enter a valid amount');
-    return;
-  }
+    if (!Number.isFinite(allocated) || allocated <= 0) {
+      Alert.alert('Enter a valid amount');
+      return;
+    }
 
-  const pockets = await getPockets();
-  const salaryData = await getSalary();
+    const newPocket: Pocket = {
+      id: Date.now().toString(),
+      name: name.trim(),
+      allocated,
+      spent: 0,
+    };
 
-  if (!salaryData) {
-    alert('Please set your salary first');
-    return;
-  }
-
-  const totalAllocated = pockets.reduce(
-    (sum, p) => sum + p.allocated,
-    0
-  );
-
-  const remaining = salaryData.monthly - totalAllocated;
-
-  if (allocated > remaining) {
-    alert(
-        `Allocation exceeds remaining salary.\nAvailable: ₹${remaining}`
-    );
-    return;
-  }
-
-  const newPocket: Pocket = {
-    id: Date.now().toString(),
-    name: name.trim(),
-    allocated,
-    spent: 0,
+    await pocketStore.addPocket(newPocket);
+    navigation.goBack();
   };
-
-  await savePockets([...pockets, newPocket]);
-
-  navigation.goBack();
-};
 
   return (
     <View style={styles.container}>
@@ -72,6 +48,7 @@ export const CreatePocketScreen = ({ navigation }: any) => {
         placeholder="Pocket name (e.g. Groceries)"
         value={name}
         onChangeText={setName}
+        placeholderTextColor={colors.textMuted}
         style={styles.input}
       />
 
@@ -80,28 +57,53 @@ export const CreatePocketScreen = ({ navigation }: any) => {
         value={amount}
         onChangeText={setAmount}
         keyboardType="numeric"
+        placeholderTextColor={colors.textMuted}
         style={styles.input}
       />
 
-      <Button title="Save Pocket" onPress={onSave} />
+      <Pressable style={styles.button} onPress={onSave}>
+        <Text style={styles.buttonText}>Save Pocket</Text>
+      </Pressable>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: colors.background, // ✅ white, consistent
     padding: 16,
   },
+
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
+    color: colors.textPrimary,
     marginBottom: 16,
   },
+
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: colors.divider,
+    backgroundColor: colors.surface,
     padding: 12,
     marginBottom: 16,
-    borderRadius: 6,
+    borderRadius: 10,
+    fontSize: 16,
+    color: colors.textPrimary,
+  },
+
+  button: {
+    backgroundColor: colors.primary, // ✅ accent
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+
+  buttonText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

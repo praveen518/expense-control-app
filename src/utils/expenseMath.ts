@@ -1,16 +1,23 @@
 import { Expense } from '../types/expense';
 
-export const getSpentForPocketInMonth = (
+export function getSpentForPocketInMonth(
   expenses: Expense[],
   pocketId: string,
   month: string
-): number => {
+) {
   return expenses
     .filter(
-      (e) => e.pocketId === pocketId && e.month === month && !e.deletedAt
+      (e) =>
+        e.pocketId === pocketId &&
+        e.month === month &&
+        !e.deletedAt
     )
-    .reduce((sum, e) => sum + e.amount, 0);
-};
+    .reduce(
+      (sum, e) => sum + Math.abs(e.amount),
+      0
+    );
+}
+
 
 export const getRemainingForPocketInMonth = (
   allocated: number,
