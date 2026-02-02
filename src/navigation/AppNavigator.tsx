@@ -3,12 +3,28 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { DashboardStack } from './DashboardStack';
 import { PocketsStack } from './PocketsStack';
 import { ProfileStack } from './ProfileStack';
+import { colors } from '../themes/colors';
+import { useThemeMode } from '../store/settings/themeStore';
 
 const Tab = createBottomTabNavigator();
 
 export const AppNavigator = () => {
+  useThemeMode(); // 🔑
+
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+
+        tabBarStyle: {
+          backgroundColor: colors.surfaceSoft,
+          borderTopColor: colors.divider,
+        },
+
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+      }}
+    >
       <Tab.Screen
         name="DashboardTab"
         component={DashboardStack}

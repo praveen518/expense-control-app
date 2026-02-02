@@ -13,14 +13,16 @@ import { pocketStore } from '../store/pocket/pocketStore.instance';
 import { formatINR } from '../utils/currency';
 import { getCurrentMonth } from '../utils/month';
 import { colors } from '../themes/colors';
+import { useThemeMode } from '../store/settings/themeStore';
+import { useBalanceVisibility } from '../hooks/useBalanceVisibility';
+import { formatHiddenAmount } from '../utils/formatHiddenAmount';
 
 export const ProfileScreen = ({ navigation }: any) => {
+  useThemeMode();
+  const isBalanceVisible = useBalanceVisibility();
+
   const salary = useSalary();
   const currentMonth = getCurrentMonth();
-
-  /* =========================
-     Pocket allocations (SSOT)
-     ========================= */
 
   const pocketSummaries = useSyncExternalStore(
     pocketStore.subscribe.bind(pocketStore),
@@ -34,93 +36,143 @@ export const ProfileScreen = ({ navigation }: any) => {
   );
 
   const remaining =
-    salary !== null ? salary - allocated : 0;
+    typeof salary === 'number'
+      ? salary - allocated
+      : 0;
+
+  const hasSalary =
+    typeof salary === 'number' && salary > 0;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Profile</Text>
+      {/* =========================
+          Header
+         ========================= */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Profile</Text>
+        <Text style={styles.subtitle}>
+          Manage your money setup
+        </Text>
+      </View>
 
+      {/* =========================
+          Money Setup
+         ========================= */}
       <View style={styles.card}>
-        <Text style={styles.cardLabel}>
-          Monthly Salary
+        <Text style={styles.cardTitle}>
+          Monthly Setup
         </Text>
 
         <Text style={styles.salary}>
-          {typeof salary === 'number' && salary > 0
-            ? formatINR(salary)
-            : 'Not set'}
+          {hasSalary
+            ? formatHiddenAmount(salary, isBalanceVisible)
+            : 'Salary not set'}
         </Text>
 
-        {typeof salary === 'number' && salary > 0 && (
-  <View style={styles.breakdown}>
-    <View style={styles.row}>
-      <Text style={styles.metaLabel}>
-        Allocated to pockets
-      </Text>
-      <Text style={styles.metaValue}>
-        {formatINR(allocated)}
-      </Text>
-    </View>
 
-    <View style={styles.row}>
-      <Text style={styles.metaLabel}>
-        Remaining
-      </Text>
-      <Text
-        style={[
-          styles.remaining,
-          remaining < 0
-            ? styles.negative
-            : styles.positive,
-        ]}
-      >
-        {formatINR(remaining)}
-      </Text>
-    </View>
-  </View>
-)}
+        {hasSalary && (
+          <View style={styles.breakdown}>
+            <View style={styles.row}>
+              <Text style={styles.metaLabel}>
+                Allocated to pockets
+              </Text>
+              <Text style={styles.metaValue}>
+                {formatHiddenAmount(allocated, isBalanceVisible)}
+              </Text>
+            </View>
 
+            <View style={styles.row}>
+              <Text style={styles.metaLabel}>
+                Remaining
+              </Text>
+              <Text
+                style={[
+                  styles.metaValue,
+                  remaining < 0
+                    ? styles.negative
+                    : styles.positive,
+                ]}
+              >
+                {formatHiddenAmount(remaining, isBalanceVisible)}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {!hasSalary && (
+          <Pressable
+            style={styles.inlineAction}
+            onPress={() =>
+              navigation.navigate('Settings')
+            }
+          >
+            <Text style={styles.inlineActionText}>
+              Set your salary →
+            </Text>
+          </Pressable>
+        )}
       </View>
 
-      {/* Actions */}
-      <View style={styles.actions}>
+      {/* =========================
+          Quick Actions
+         ========================= */}
+      <Text style={styles.sectionTitle}>
+        Quick actions
+      </Text>
+
+      <View style={styles.list}>
         <Pressable
-          style={styles.actionRow}
+          style={styles.listRow}
           onPress={() =>
             navigation.navigate('AddIncome')
           }
         >
-          <Text style={styles.actionText}>
+          <Text style={styles.listText}>
             Add Income
           </Text>
+          <Text style={styles.chevron}>›</Text>
         </Pressable>
 
         <Pressable
-          style={styles.actionRow}
+          style={styles.listRow}
           onPress={() =>
             navigation.navigate('RecentlyDeleted')
           }
         >
-          <Text style={styles.actionText}>
+          <Text style={styles.listText}>
             Recently Deleted
           </Text>
+          <Text style={styles.chevron}>›</Text>
         </Pressable>
+      </View>
 
+      {/* =========================
+          App Settings
+         ========================= */}
+      <Text style={styles.sectionTitle}>
+        App
+      </Text>
+
+      <View style={styles.list}>
         <Pressable
-          style={styles.actionRow}
+          style={styles.listRow}
           onPress={() =>
             navigation.navigate('Settings')
           }
         >
-          <Text style={styles.actionText}>
+          <Text style={styles.listText}>
             Settings
           </Text>
+          <Text style={styles.chevron}>›</Text>
         </Pressable>
       </View>
     </View>
   );
 };
 
+/* =========================
+   Styles
+   ========================= */
 
 const styles = StyleSheet.create({
   container: {
@@ -129,30 +181,40 @@ const styles = StyleSheet.create({
     padding: 16,
   },
 
+  header: {
+    marginBottom: 20,
+  },
+
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: 16,
+  },
+
+  subtitle: {
+    fontSize: 14,
+    color: colors.textMuted,
+    marginTop: 4,
   },
 
   card: {
     backgroundColor: colors.surfaceSoft,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
     marginBottom: 24,
   },
 
-  cardLabel: {
+  cardTitle: {
     fontSize: 14,
+    fontWeight: '600',
     color: colors.textMuted,
+    marginBottom: 6,
   },
 
   salary: {
     fontSize: 28,
     fontWeight: '700',
     color: colors.textPrimary,
-    marginTop: 4,
   },
 
   breakdown: {
@@ -171,14 +233,9 @@ const styles = StyleSheet.create({
   },
 
   metaValue: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: colors.textPrimary,
-  },
-
-  remaining: {
-    fontSize: 16,
-    fontWeight: '700',
   },
 
   positive: {
@@ -189,20 +246,47 @@ const styles = StyleSheet.create({
     color: colors.danger,
   },
 
-  actions: {
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
+  inlineAction: {
+    marginTop: 12,
   },
 
-  actionRow: {
+  inlineActionText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginBottom: 8,
+  },
+
+  list: {
+    backgroundColor: colors.surfaceSoft,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+
+  listRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 16,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.divider,
   },
 
-  actionText: {
+  listText: {
     fontSize: 16,
     fontWeight: '500',
-    color: colors.primary,
+    color: colors.textPrimary,
+  },
+
+  chevron: {
+    fontSize: 18,
+    color: colors.textMuted,
   },
 });

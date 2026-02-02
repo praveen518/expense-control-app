@@ -16,9 +16,26 @@ import { loadSettings } from '../store/settingsStore';
 import { runMigrations } from '../db/migrations';
 import { incomeStore } from '../store/income/incomeStore.instance';
 import { balanceStore } from '../store/balance/balanceStore.instance';
+import { themeStore, useThemeMode } from '../store/settings/themeStore';
+import { resolveTheme } from '../themes/theme';
 
 export default function App() {
   const [ready, setReady] = useState(false);
+
+  const mode = useThemeMode();
+  const theme = resolveTheme(mode);
+
+  const navTheme = {
+    dark: mode === 'dark',
+    colors: {
+      background: theme.background,
+      card: theme.surfaceSoft,
+      text: theme.textPrimary,
+      border: theme.divider,
+      primary: theme.primary,
+      notification: theme.primary,
+    },
+  };
 
   useEffect(() => {
     async function bootstrap() {
@@ -32,6 +49,7 @@ export default function App() {
       pocketStore.hydrateFromSQLite();
       incomeStore.hydrateFromSQLite();
       await balanceStore.hydrate();
+      await themeStore.hydrate();
       setReady(true);
     }
 
@@ -45,7 +63,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <View style={styles.root}>
-        <NavigationContainer>
+        <NavigationContainer theme={navTheme}>
           <AppNavigator />
         </NavigationContainer>
 

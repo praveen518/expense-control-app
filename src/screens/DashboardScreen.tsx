@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
+  ScrollView,
 } from 'react-native';
 import { useSyncExternalStore } from 'react';
 
@@ -27,8 +28,17 @@ import { AttentionPockets } from '../components/dashboard/AttentionPockets';
 import { PocketProgressList } from '../components/dashboard/PocketProgressList';
 import { TopExpenses } from '../components/dashboard/TopExpenses';
 import { useSalary } from '../hooks/useSettings';
+import { useThemeMode } from '../store/settings/themeStore';
+
+import { useBalanceVisibility } from '../hooks/useBalanceVisibility';
+import { privacyStore } from '../store/settings/privacyStore';
+import { formatHiddenAmount } from '../utils/formatHiddenAmount';
 
 export const DashboardScreen = ({ navigation }: any) => {
+  useThemeMode();
+
+  const isBalanceVisible = useBalanceVisibility();
+
   /* =========================
      Month state
      ========================= */
@@ -39,7 +49,6 @@ export const DashboardScreen = ({ navigation }: any) => {
   /* =========================
      Store subscriptions
      ========================= */
-
   const expenseSummary = useSyncExternalStore(
     expenseStore.subscribe.bind(expenseStore),
     () => expenseStore.getDashboardSummary(month)
@@ -47,8 +56,7 @@ export const DashboardScreen = ({ navigation }: any) => {
 
   const pocketSummaries = useSyncExternalStore(
     pocketStore.subscribe.bind(pocketStore),
-    () =>
-      pocketStore.getAllPocketSummaries(month)
+    () => pocketStore.getAllPocketSummaries(month)
   );
 
   const topExpenses = useSyncExternalStore(
@@ -63,15 +71,13 @@ export const DashboardScreen = ({ navigation }: any) => {
   const incomeFromRecords = useSyncExternalStore(
     incomeStore.subscribe.bind(incomeStore),
     () =>
-      incomeStore.getTotalIncomeForMonth(
-        month
-      )
+      incomeStore.getTotalIncomeForMonth(month)
   );
 
   const salary = useSalary();
-  
-  // Total income = income records + salary (for current/selected month)
-  const totalIncome = incomeFromRecords + (salary || 0);
+
+  const totalIncome =
+    incomeFromRecords + (salary || 0);
 
   const balance = useSyncExternalStore(
     balanceStore.subscribe.bind(balanceStore),
@@ -79,9 +85,8 @@ export const DashboardScreen = ({ navigation }: any) => {
   );
 
   /* =========================
-     Derived values (UI-only)
+     Derived values
      ========================= */
-
   const totalSpent =
     expenseSummary.totalSpent;
 
@@ -113,27 +118,83 @@ export const DashboardScreen = ({ navigation }: any) => {
     .filter(item => item.rank < 3)
     .sort((a, b) => a.rank - b.rank);
 
+  const TOP_POCKETS = 3;
+
+  const topUsagePockets =
+    pocketSummaries
+      .filter(p => p.allocated > 0)
+      .sort((a, b) => {
+        const aPct =
+          (a.allocated - a.remaining) /
+          a.allocated;
+        const bPct =
+          (b.allocated - b.remaining) /
+          b.allocated;
+        return bPct - aPct;
+      })
+      .slice(0, TOP_POCKETS);
+
+  const hasMorePockets =
+    pocketSummaries.length >
+    TOP_POCKETS;
+
   /* =========================
      Render
      ========================= */
-
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={{
+        padding: 16,
+        paddingBottom: 32,
+      }}
+      showsVerticalScrollIndicator={false}
+    >
       {/* =========================
           OVERALL BALANCE
          ========================= */}
-      <View style={styles.balanceCard}>
-        <Text style={styles.balanceLabel}>
-          Overall Balance
-        </Text>
+      <View
+        style={[
+          styles.balanceCard,
+          { backgroundColor: colors.primarySoft },
+        ]}
+      >
         <Text
           style={[
-            styles.balanceValue,
-            balance < 0 && styles.negative,
+            styles.balanceLabel,
+            { color: colors.textMuted },
           ]}
         >
-          {formatINR(balance)}
+          Overall Balance
         </Text>
+
+        <View style={styles.balanceValueRow}>
+          <Text
+            style={[
+              styles.balanceValue,
+              {
+                color:
+                  balance < 0
+                    ? colors.danger
+                    : colors.primary,
+              },
+            ]}
+          >
+            {formatHiddenAmount(
+              balance,
+              isBalanceVisible
+            )}
+          </Text>
+
+          <Pressable
+            onPress={privacyStore.toggle}
+            hitSlop={8}
+          >
+            <Text style={styles.eye}>
+              {isBalanceVisible ? '🙈' : '👁'}
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* =========================
@@ -147,12 +208,22 @@ export const DashboardScreen = ({ navigation }: any) => {
             )
           }
         >
-          <Text style={styles.monthNav}>
+          <Text
+            style={[
+              styles.monthNav,
+              { color: colors.primary },
+            ]}
+          >
             ◀
           </Text>
         </Pressable>
 
-        <Text style={styles.monthText}>
+        <Text
+          style={[
+            styles.monthText,
+            { color: colors.textPrimary },
+          ]}
+        >
           {month}
         </Text>
 
@@ -163,7 +234,12 @@ export const DashboardScreen = ({ navigation }: any) => {
             )
           }
         >
-          <Text style={styles.monthNav}>
+          <Text
+            style={[
+              styles.monthNav,
+              { color: colors.primary },
+            ]}
+          >
             ▶
           </Text>
         </Pressable>
@@ -172,43 +248,76 @@ export const DashboardScreen = ({ navigation }: any) => {
       {/* =========================
           MONTHLY SUMMARY
          ========================= */}
-      <View style={styles.monthlyCard}>
+      <View
+        style={[
+          styles.monthlyCard,
+          { backgroundColor: colors.surface },
+        ]}
+      >
         <View style={styles.row}>
-          <Text style={styles.label}>
+          <Text
+            style={[
+              styles.label,
+              { color: colors.textMuted },
+            ]}
+          >
             Income
           </Text>
-          <Text style={styles.positive}>
+          <Text
+            style={[
+              styles.positive,
+              { color: colors.primary },
+            ]}
+          >
             {formatINR(totalIncome)}
           </Text>
-          {/* <Pressable
-            style={styles.addIncomeButton}
-            onPress={() => navigation.navigate('AddIncome')}
-          >
-            <Text style={styles.addIncomeButtonText}>＋</Text>
-          </Pressable> */}
         </View>
 
         <View style={styles.row}>
-          <Text style={styles.label}>
+          <Text
+            style={[
+              styles.label,
+              { color: colors.textMuted },
+            ]}
+          >
             Spent
           </Text>
-          <Text style={styles.negative}>
+          <Text
+            style={[
+              styles.negative,
+              { color: colors.danger },
+            ]}
+          >
             {formatINR(totalSpent)}
           </Text>
         </View>
 
-        <View style={styles.divider} />
+        <View
+          style={[
+            styles.divider,
+            { backgroundColor: colors.divider },
+          ]}
+        />
 
         <View style={styles.row}>
-          <Text style={styles.label}>
+          <Text
+            style={[
+              styles.label,
+              { color: colors.textMuted },
+            ]}
+          >
             Remaining
           </Text>
           <Text
-            style={
-              remaining < 0
-                ? styles.negative
-                : styles.positive
-            }
+            style={[
+              styles.positive,
+              {
+                color:
+                  remaining < 0
+                    ? colors.danger
+                    : colors.primary,
+              },
+            ]}
           >
             {formatINR(remaining)}
           </Text>
@@ -237,33 +346,65 @@ export const DashboardScreen = ({ navigation }: any) => {
         }
       />
 
-      <PocketProgressList
-        pockets={pocketSummaries}
-        onPressPocket={pocketId =>
-          navigation.navigate(
-            'PocketDetail',
-            { pocketId }
-          )
-        }
-      />
-    </View>
+      {/* =========================
+          WHERE YOUR MONEY GOES
+         ========================= */}
+      {topUsagePockets.length > 0 && (
+        <View style={{ marginBottom: 12 }}>
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: '600',
+              color: colors.textMuted,
+              marginBottom: 12,
+            }}
+          >
+            Where Your Money Goes
+          </Text>
+
+          <PocketProgressList
+            pockets={topUsagePockets}
+            mode="summary"
+            maxItems={TOP_POCKETS}
+            onPressPocket={pocketId =>
+              navigation.navigate(
+                'PocketDetail',
+                { pocketId }
+              )
+            }
+          />
+
+          {hasMorePockets && (
+            <Pressable
+              onPress={() =>
+                navigation.navigate(
+                  'PocketsTab'
+                )
+              }
+            >
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: 14,
+                  fontWeight: '600',
+                }}
+              >
+                View all pockets →
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+    </ScrollView>
   );
 };
 
 /* =========================
-   Styles
+   Static Styles ONLY
    ========================= */
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    padding: 16,
-  },
-
-  /* Balance */
   balanceCard: {
-    backgroundColor: colors.primarySoft,
     borderRadius: 16,
     padding: 20,
     marginBottom: 20,
@@ -272,17 +413,26 @@ const styles = StyleSheet.create({
 
   balanceLabel: {
     fontSize: 14,
-    color: colors.textMuted,
-    marginBottom: 6,
+    marginBottom: 8,
+  },
+
+  balanceValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 
   balanceValue: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.primary,
   },
 
-  /* Month switcher */
+  eye: {
+    fontSize: 18,
+    color: colors.textMuted,
+    opacity: 0.8,
+  },
+
   monthRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -294,18 +444,14 @@ const styles = StyleSheet.create({
   monthText: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.textPrimary,
   },
 
   monthNav: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.primary,
   },
 
-  /* Monthly card */
   monthlyCard: {
-    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 16,
     marginBottom: 16,
@@ -319,38 +465,18 @@ const styles = StyleSheet.create({
 
   label: {
     fontSize: 14,
-    color: colors.textMuted,
   },
 
   divider: {
     height: 1,
-    backgroundColor: colors.divider,
     marginVertical: 8,
   },
 
   positive: {
-    color: colors.primary,
     fontWeight: '700',
   },
 
   negative: {
-    color: colors.danger,
     fontWeight: '700',
-  },
-  /* Inline Add Income Button */
-  addIncomeButton: {
-    backgroundColor: colors.primary,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  addIncomeButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-    lineHeight: 20,
   },
 });

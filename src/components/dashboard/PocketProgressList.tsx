@@ -2,9 +2,10 @@ import React from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   Pressable,
+  StyleSheet,
 } from 'react-native';
+
 import { colors } from '../../themes/colors';
 import { formatINR } from '../../utils/currency';
 
@@ -20,114 +21,150 @@ type PocketSummary = {
 type Props = {
   pockets: PocketSummary[];
   onPressPocket: (pocketId: string) => void;
+
+  /** NEW */
+  mode?: 'full' | 'summary';
+  maxItems?: number;
 };
 
-export function PocketProgressList({
+export const PocketProgressList = ({
   pockets,
   onPressPocket,
-}: Props) {
+  mode = 'full',
+  maxItems,
+}: Props) => {
+  const visiblePockets =
+    mode === 'summary' && maxItems
+      ? pockets.slice(0, maxItems)
+      : pockets;
+
+  if (visiblePockets.length === 0) return null;
+  console.log('visiblePockets', visiblePockets);
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Pockets</Text>
+      {visiblePockets.map(
+        ({ pocket, allocated, remaining }) => {
+          const spent = allocated - remaining;
+          const percent =
+            allocated > 0
+              ? Math.min(
+                  spent / allocated,
+                  1
+                )
+              : 0;
 
-      {pockets.map(({ pocket, allocated, remaining }) => {
-        const spent = allocated - remaining;
-        const ratio =
-          allocated > 0 ? spent / allocated : 0;
-        const clamped = Math.min(Math.max(ratio, 0), 1);
+          const percentLabel = Math.round(
+            percent * 100
+          );
 
-        const barColor =
-          ratio >= 1
-            ? colors.danger
-            : ratio >= 0.75
-            ? '#f59e0b'
-            : colors.primary;
+          const progressColor =
+            percentLabel > 85
+              ? colors.danger
+              : percentLabel > 60
+              ? '#f59e0b'
+              : colors.primary;
 
-        return (
-          <Pressable
-            key={pocket.id}
-            style={styles.row}
-            onPress={() => onPressPocket(pocket.id)}
-          >
-            <View style={styles.rowTop}>
-              <Text style={styles.name}>
-                {pocket.name}
-              </Text>
+          return (
+            <Pressable
+              key={pocket.id}
+              onPress={() =>
+                onPressPocket(pocket.id)
+              }
+              style={styles.item}
+            >
+              <View style={styles.row}>
+                <Text
+                  style={[
+                    styles.name,
+                    { color: colors.textPrimary },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {pocket.name}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.percent,
+                    { color: progressColor },
+                  ]}
+                >
+                  {percentLabel}%
+                </Text>
+              </View>
+
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: `${percentLabel}%`,
+                      backgroundColor:
+                        progressColor,
+                    },
+                  ]}
+                />
+              </View>
+
               <Text
                 style={[
-                  styles.amount,
-                  remaining < 0 && styles.negative,
+                  styles.subText,
+                  { color: colors.textMuted },
                 ]}
               >
-                {formatINR(remaining)}
+                {formatINR(spent)} spent of{' '}
+                {formatINR(allocated)}
               </Text>
-            </View>
-
-            <View style={styles.barBackground}>
-              <View
-                style={[
-                  styles.barFill,
-                  {
-                    width: `${clamped * 100}%`,
-                    backgroundColor: barColor,
-                  },
-                ]}
-              />
-            </View>
-          </Pressable>
-        );
-      })}
+            </Pressable>
+          );
+        }
+      )}
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
+    marginBottom: 12,
+  },
+
+  item: {
     marginBottom: 16,
   },
 
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-    color: colors.textPrimary,
-  },
-
   row: {
-    marginBottom: 14,
-  },
-
-  rowTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 6,
   },
 
   name: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: 8,
   },
 
-  amount: {
-    fontSize: 15,
+  percent: {
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.textPrimary,
   },
 
-  negative: {
-    color: colors.danger,
-  },
-
-  barBackground: {
+  progressTrack: {
     height: 6,
-    backgroundColor: colors.divider,
-    borderRadius: 4,
+    borderRadius: 3,
+    backgroundColor: '#e5e7eb',
     overflow: 'hidden',
   },
 
-  barFill: {
+  progressFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 3,
+  },
+
+  subText: {
+    fontSize: 12,
+    marginTop: 4,
   },
 });

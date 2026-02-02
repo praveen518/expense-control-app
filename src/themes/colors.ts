@@ -1,19 +1,29 @@
-export const colors = {
-  /* Brand / Accent */
-  primary: '#22c55e',          // green
-  primarySoft: '#ecfeff',      // banner bg
-  primaryBorder: '#86efac',
+// export const colors = {
+//   primary: '#22c55e',
+//   primarySoft: '#ecfeff',
+//   primaryBorder: '#86efac',
 
-  /* Surfaces */
-  background: '#ffffff',       // KEEP WHITE
-  surface: '#ffffff',
-  surfaceSoft: '#f8fafc',      // cards / sections
+//   background: '#f8fafc',
+//   surface: '#020617',         // header / dashboard
+//   surfaceSoft: '#ffffff',     // cards
 
-  /* Text */
-  textPrimary: '#111827',
-  textMuted: '#6b7280',
+//   textPrimary: '#020617',
+//   textMuted: '#64748b',
 
-  /* States */
-  danger: '#dc2626',
-  divider: '#e5e7eb',
-};
+//   danger: '#dc2626',
+//   divider: '#e5e7eb',
+// };
+
+import { resolveTheme } from './theme';
+import { themeStore } from '../store/settings/themeStore';
+import { Theme } from './theme.types';
+
+type ThemeKey = keyof Theme;
+
+export const colors: Theme = new Proxy({} as Theme, {
+  get(_, prop: ThemeKey) {
+    const mode = themeStore.getSnapshot();
+    const theme = resolveTheme(mode);
+    return theme[prop];
+  },
+});
