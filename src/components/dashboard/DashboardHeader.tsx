@@ -4,41 +4,59 @@ import { colors } from '../../themes/colors';
 import { formatINR } from '../../utils/currency';
 
 type Props = {
-  totalIncome: number;
-  totalSpent: number;
-  netAmount: number;
+  totalIncome: number;   // monthly
+  totalSpent: number;    // monthly
+  remaining: number;     // monthly (income - spent)
+  balance: number;       // global
 };
 
 export function DashboardHeader({
   totalIncome,
   totalSpent,
-  netAmount,
+  remaining,
+  balance,
 }: Props) {
   return (
     <View style={styles.card}>
       <View style={styles.row}>
-        <Text style={[styles.amount, totalIncome > 0 && styles.positive]}>
+        <Text
+          style={[
+            styles.amount,
+            totalIncome > 0 && styles.positive,
+          ]}
+        >
           Income {formatINR(totalIncome)}
         </Text>
 
         <Text
           style={[
             styles.amount,
-            netAmount < 0 ? styles.negative : styles.positive,
+            balance < 0 ? styles.negative : styles.positive,
           ]}
         >
-          Balance {formatINR(netAmount)}
+          Balance {formatINR(balance)}
         </Text>
       </View>
 
-      <Text
-        style={[
-          styles.amount,
-          totalSpent > 0 && styles.negative,
-        ]}
-      >
-        Spent {formatINR(totalSpent)}
-      </Text>
+      <View style={styles.row}>
+        <Text
+          style={[
+            styles.amount,
+            totalSpent > 0 && styles.negative,
+          ]}
+        >
+          Spent {formatINR(totalSpent)}
+        </Text>
+
+        <Text
+          style={[
+            styles.amount,
+            remaining < 0 ? styles.negative : styles.positive,
+          ]}
+        >
+          Remaining {formatINR(remaining)}
+        </Text>
+      </View>
     </View>
   );
 }

@@ -9,14 +9,13 @@ import { AppNavigator } from '../navigation/AppNavigator';
 import { UndoDeleteBanner } from '../components/UndoDeleteBanner';
 
 import { openDB } from '../db/db';
-import { initExpenseDB } from '../db/schema';
-import { initPocketDB } from '../db/pocket.schema';
-import { migrateExpensesToSQLite } from '../storage/migrateExpensesToSQLite';
 
 import { expenseStore } from '../store/expense/expenseStore.instance';
 import { pocketStore } from '../store/pocket/pocketStore.instance';
 import { loadSettings } from '../store/settingsStore';
-import { ensureSalaryTransaction } from '../finance/ensureSalaryTransaction';
+import { runMigrations } from '../db/migrations';
+import { incomeStore } from '../store/income/incomeStore.instance';
+import { balanceStore } from '../store/balance/balanceStore.instance';
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -28,15 +27,11 @@ export default function App() {
 
       // 2️⃣ Database + expenses
       openDB();
-      initExpenseDB();
-      initPocketDB();
-      await migrateExpensesToSQLite();
+      await runMigrations();
       expenseStore.hydrateFromSQLite();
       pocketStore.hydrateFromSQLite();
-
-      // 4️⃣ Ensure salary entry exists
-      ensureSalaryTransaction();
-
+      incomeStore.hydrateFromSQLite();
+      await balanceStore.hydrate();
       setReady(true);
     }
 

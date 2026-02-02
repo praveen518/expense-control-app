@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { v4 as uuid } from 'uuid';
 
-import { expenseStore } from '../store/expense/expenseStore.instance';
+import { addIncomeWithBalance } from '../store/income/income.actions';
 import { getCurrentMonth } from '../utils/month';
 import { colors } from '../themes/colors';
 
@@ -22,17 +22,14 @@ export const AddIncomeScreen = ({ navigation }: any) => {
 
     const now = Date.now();
 
-    expenseStore.addExpense({
+    addIncomeWithBalance({
       id: uuid(),
-      pocketId: '__income__',
-      amount: value,              // POSITIVE = income
+      amount: value,          // ALWAYS positive
+      source: note || 'Income',
       month: getCurrentMonth(),
-
-      date: now,                  // when income happened
-      createdAt: now,             // when record was created
-      isDeleted: false,            // new entry
-
-      note: note || undefined,
+      date: now,
+      createdAt: now,
+      isDeleted: false,
     });
 
     navigation.goBack();
@@ -54,7 +51,7 @@ export const AddIncomeScreen = ({ navigation }: any) => {
       <TextInput
         value={note}
         onChangeText={setNote}
-        placeholder="Note (optional)"
+        placeholder="Source / note (optional)"
         style={styles.input}
         placeholderTextColor={colors.textMuted}
       />
@@ -69,7 +66,7 @@ export const AddIncomeScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background, // ✅ white, consistent
+    backgroundColor: colors.background,
     padding: 16,
   },
 
@@ -92,7 +89,7 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    backgroundColor: colors.primary, // ✅ accent
+    backgroundColor: colors.primary,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',

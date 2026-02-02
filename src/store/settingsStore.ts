@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ensureSalaryTransaction } from '../finance/ensureSalaryTransaction';
+import { balanceStore } from './balance/balanceStore.instance';
 
 const SALARY_KEY = 'settings.salary';
 
@@ -26,8 +26,16 @@ function emit() {
 }
 
 export async function setSalary(value: number) {
+  const previousSalary = salary;
   salary = value;
   await AsyncStorage.setItem(SALARY_KEY, String(value));
-  emit(); // 🔥 notify subscribers
-  ensureSalaryTransaction();
+  emit();
+
+  /* Update dashboard balance by the salary delta */
+  const delta = value - previousSalary;
+  if (delta > 0) {
+    await balanceStore.applyCredit(delta, 'salary:set');
+  } else if (delta < 0) {
+    await balanceStore.applyDebit(Math.abs(delta), 'salary:set');
+  }
 }

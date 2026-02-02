@@ -1,5 +1,5 @@
 import { expenseStore } from '../store/expense/expenseStore.instance';
-import { getSalary } from '../store/settingsStore';
+// import { getSalary } from '../store/settingsStore';
 import { getCurrentMonth } from '../utils/month';
 
 /* =========================
