@@ -652,6 +652,213 @@ SQLite → ExpenseStore.hydrateFromSQLite() → this.expenses Map
    - `useSyncExternalStore` detects balance change
    - "Overall Balance" displays new value
 
+
+✨ Recent Work & UX / Architecture Enhancements
+
+This section documents recent improvements focused on UX polish, theming, and privacy, without changing the core data model or store architecture.
+
+🎨 App-wide Theming (Light / Dark / System)
+
+Introduced a central theme system with support for:
+
+light
+
+dark
+
+system (follows OS preference)
+
+Theme mode is persisted using AsyncStorage
+
+Implemented a dedicated themeStore with:
+
+in-memory state
+
+subscribe() API
+
+useSyncExternalStore integration for reactive UI updates
+
+All screens re-render automatically on theme change without modifying each screen manually, by:
+
+centralizing colors
+
+subscribing once per screen using useThemeMode()
+
+Key characteristics:
+
+Works with React Native New Architecture (Fabric)
+
+No Expo dependencies
+
+No LayoutAnimation usage (avoids Fabric warnings)
+
+No performance-heavy re-render chains
+
+🧠 Store-driven Theme Propagation
+
+Screens explicitly do not manage theme state locally
+
+Theme changes propagate through:
+
+themeStore → useSyncExternalStore → re-render
+
+
+Prevents prop-drilling and keeps screens declarative
+
+Enables instant, app-wide visual updates
+
+🔐 Privacy Feature: Hide / Show Sensitive Amounts
+
+Implemented a privacy-first UX pattern commonly found in banking apps.
+
+Behavior
+
+Sensitive monetary values can be hidden using masking (₹•••••)
+
+Toggle is persisted across app restarts
+
+Visibility applies to:
+
+Dashboard
+
+Profile
+
+Does not affect:
+
+Pocket detail screens
+
+Expense lists
+
+Progress bars or percentages
+
+Implementation
+
+Introduced a privacyStore:
+
+Boolean flag: isBalanceVisible
+
+Persisted in AsyncStorage
+
+Exposed via useBalanceVisibility() hook
+
+Central formatter:
+
+formatHiddenAmount(value, isVisible)
+
+
+Avoids conditional JSX duplication
+
+Maintains layout stability when toggling visibility
+
+📊 Dashboard UX Improvements
+
+Several focused UX upgrades were made to improve readability and scalability:
+
+1. Overall Balance Card
+
+Clean separation between:
+
+label
+
+value
+
+Hide/Show toggle placed next to the amount, not the label
+
+Prevents accidental disclosure in public environments
+
+2. “Where Your Money Goes” Section
+
+Introduced Top Usage Pockets logic:
+
+Sorts pockets by percentage of budget spent
+
+Displays top N pockets (default: 3)
+
+Added “View all pockets →” CTA when more pockets exist
+
+Avoids long vertical scrolling as pocket count grows
+
+3. Pocket Progress Summary Mode
+
+Reused PocketProgressList component with:
+
+mode="summary"
+
+maxItems
+
+Single component supports:
+
+dashboard summary
+
+full pockets screen
+
+Keeps UI DRY and consistent
+
+👤 Profile Screen UX Restructure
+
+Refactored Profile screen to clarify responsibilities without adding new features.
+
+New Structure
+
+Header
+
+Context-setting (“Manage your money setup”)
+
+Monthly Setup Card
+
+Salary
+
+Allocated vs remaining
+
+Inline CTA when salary is missing
+
+Quick Actions
+
+Add Income
+
+Recently Deleted
+
+App Settings
+
+Settings navigation separated visually
+
+Improvements
+
+Clear visual hierarchy
+
+Reduced cognitive load
+
+Better separation of financial info vs app controls
+
+Profile screen now acts as a setup & control hub, not an analytics page
+
+🧩 UX Polishing Principles Followed
+
+No layout shifts on state changes
+
+No duplicated sources of truth
+
+No screen-specific business logic
+
+No direct access to AsyncStorage or DB from UI
+
+All new features respect existing:
+
+store patterns
+
+subscription model
+
+selector-based computation
+
+🏁 Summary of Recent Additions
+Area	Improvement
+Theming	Light / Dark / System with central store
+Privacy	Hide/show sensitive amounts
+Dashboard	Scalable pocket summary UX
+Profile	Clear structure & hierarchy
+Architecture	Zero violation of store → UI contract
+
+
+
 **Data flow:**
 ```
 UI → settingsStore.setSalary() → AsyncStorage (salary)
