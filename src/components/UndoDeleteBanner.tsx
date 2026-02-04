@@ -8,18 +8,19 @@ import {
   Easing,
 } from 'react-native';
 import { useSyncExternalStore } from 'react';
-import { expenseStore } from '../store/expense/expenseStore.instance';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { transactionStore } from '../store/transaction/transactionStore.instance';
 
 export function UndoDeleteBanner() {
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(120)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
-  // ✅ SINGLE SOURCE OF TRUTH for undo state
+  // ✅ SINGLE SOURCE OF TRUTH (TransactionStore)
   const { canUndo, lastDeleted } = useSyncExternalStore(
-    expenseStore.subscribe.bind(expenseStore),
-    expenseStore.getUndoSnapshot.bind(expenseStore)
+    transactionStore.subscribe.bind(transactionStore),
+    transactionStore.getUndoSnapshot.bind(transactionStore)
   );
 
   useEffect(() => {
@@ -41,12 +42,12 @@ export function UndoDeleteBanner() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [canUndo, translateY, opacity]);
+  }, [canUndo, opacity, translateY]);
 
   useEffect(() => {
     if (canUndo) {
       AccessibilityInfo.announceForAccessibility(
-        'Expense deleted. Undo available.'
+        'Transaction deleted. Undo available.'
       );
     }
   }, [canUndo]);
@@ -68,10 +69,16 @@ export function UndoDeleteBanner() {
     >
       <Text style={styles.text}>
         ₹{Math.abs(lastDeleted.amount)} deleted
-        {lastDeleted.note ? ` | ${lastDeleted.note}` : ''}
+        {lastDeleted.source
+          ? ` | ${lastDeleted.source}`
+          : ''}
       </Text>
 
-      <Pressable onPress={() => expenseStore.undoDelete()}>
+      <Pressable
+        onPress={() =>
+          transactionStore.undoDelete()
+        }
+      >
         <Text style={styles.undo}>UNDO</Text>
       </Pressable>
     </Animated.View>
@@ -86,7 +93,7 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     elevation: 10,
 
-    backgroundColor: '#111827', // dark slate
+    backgroundColor: '#111827',
     borderRadius: 10,
 
     paddingHorizontal: 16,
@@ -100,7 +107,7 @@ const styles = StyleSheet.create({
   text: {
     color: '#ffffff',
     fontSize: 14,
-    flexShrink: 1, // prevents overflow if note is long
+    flexShrink: 1,
     marginRight: 12,
   },
 

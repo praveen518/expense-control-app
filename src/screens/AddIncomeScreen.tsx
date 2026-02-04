@@ -6,58 +6,96 @@ import {
   Pressable,
   StyleSheet,
 } from 'react-native';
-import { v4 as uuid } from 'uuid';
+// import { v4 as uuid } from 'uuid';
 
-import { addIncomeWithBalance } from '../store/income/income.actions';
-import { getCurrentMonth } from '../utils/month';
+// import { addIncomeWithBalance } from '../store/income/income.actions';
+// import { getCurrentMonth } from '../utils/month';
+import { addIncome } from
+  '../store/transaction/transaction.action';
+
 import { colors } from '../themes/colors';
+import { useThemeMode } from '../store/settings/themeStore';
 
 export const AddIncomeScreen = ({ navigation }: any) => {
+  useThemeMode(); // 🔑 re-render on theme change
+
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
 
   const save = () => {
-    const value = Number(amount.replace(/[^0-9]/g, ''));
-    if (!Number.isFinite(value) || value <= 0) return;
+    const value = Number(
+      amount.replace(/[^0-9]/g, '')
+    );
 
-    const now = Date.now();
+    if (!Number.isFinite(value) || value <= 0)
+      return;
 
-    addIncomeWithBalance({
-      id: uuid(),
-      amount: value,          // ALWAYS positive
+    addIncome({
+      amount: value,
       source: note || 'Income',
-      month: getCurrentMonth(),
-      date: now,
-      createdAt: now,
-      isDeleted: false,
+      date: new Date(),
     });
 
     navigation.goBack();
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Add Income</Text>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colors.background },
+      ]}
+    >
+      <Text
+        style={[
+          styles.title,
+          { color: colors.textPrimary },
+        ]}
+      >
+        Add Income
+      </Text>
 
       <TextInput
         value={amount}
         onChangeText={setAmount}
         placeholder="Amount received"
         keyboardType="numeric"
-        style={styles.input}
         placeholderTextColor={colors.textMuted}
+        style={[
+          styles.input,
+          {
+            borderColor: colors.divider,
+            backgroundColor: colors.surface,
+            color: colors.textPrimary,
+          },
+        ]}
       />
 
       <TextInput
         value={note}
         onChangeText={setNote}
         placeholder="Source / note (optional)"
-        style={styles.input}
         placeholderTextColor={colors.textMuted}
+        style={[
+          styles.input,
+          {
+            borderColor: colors.divider,
+            backgroundColor: colors.surface,
+            color: colors.textPrimary,
+          },
+        ]}
       />
 
-      <Pressable style={styles.button} onPress={save}>
-        <Text style={styles.buttonText}>Save</Text>
+      <Pressable
+        style={[
+          styles.button,
+          { backgroundColor: colors.primary },
+        ]}
+        onPress={save}
+      >
+        <Text style={styles.buttonText}>
+          Save
+        </Text>
       </Pressable>
     </View>
   );
@@ -66,30 +104,24 @@ export const AddIncomeScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
     padding: 16,
   },
 
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: colors.textPrimary,
     marginBottom: 16,
   },
 
   input: {
     borderWidth: 1,
-    borderColor: colors.divider,
-    backgroundColor: colors.surface,
     padding: 12,
     borderRadius: 10,
     marginBottom: 12,
     fontSize: 16,
-    color: colors.textPrimary,
   },
 
   button: {
-    backgroundColor: colors.primary,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',

@@ -46,6 +46,7 @@ export class IncomeStore {
   }
 
   getSnapshot() {
+    console.log('[SNAPSHOT]', 'IncomeStore');
     return this.snapshot;
   }
 

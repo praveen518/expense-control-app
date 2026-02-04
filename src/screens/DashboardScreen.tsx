@@ -8,10 +8,8 @@ import {
 } from 'react-native';
 import { useSyncExternalStore } from 'react';
 
-import { expenseStore } from '../store/expense/expenseStore.instance';
 import { pocketStore } from '../store/pocket/pocketStore.instance';
-import { incomeStore } from '../store/income/incomeStore.instance';
-import { balanceStore } from '../store/balance/balanceStore.instance';
+import { transactionStore } from '../store/transaction/transactionStore.instance';
 
 import {
   currentMonthKey,
@@ -22,11 +20,11 @@ import { getHealthRank } from '../utils/pocketHealth';
 import { formatINR } from '../utils/currency';
 import { colors } from '../themes/colors';
 
-/* Dashboard components */
 import { BurnRateChip } from '../components/dashboard/BurnRateChip';
 import { AttentionPockets } from '../components/dashboard/AttentionPockets';
 import { PocketProgressList } from '../components/dashboard/PocketProgressList';
 import { TopExpenses } from '../components/dashboard/TopExpenses';
+
 import { useSalary } from '../hooks/useSettings';
 import { useThemeMode } from '../store/settings/themeStore';
 
@@ -34,113 +32,131 @@ import { useBalanceVisibility } from '../hooks/useBalanceVisibility';
 import { privacyStore } from '../store/settings/privacyStore';
 import { formatHiddenAmount } from '../utils/formatHiddenAmount';
 
+/* =========================
+   Utils
+   ========================= */
+
+function getDaysRemaining(monthKey: string) {
+  const [y, m] = monthKey.split('-').map(Number);
+  const now = new Date();
+
+  const isCurrent =
+    now.getFullYear() === y &&
+    now.getMonth() + 1 === m;
+
+  if (!isCurrent) return 0;
+
+  const lastDay = new Date(y, m, 0).getDate();
+  return lastDay - now.getDate() + 1;
+}
+
+/* =========================
+   Screen
+   ========================= */
+
 export const DashboardScreen = ({ navigation }: any) => {
   useThemeMode();
 
   const isBalanceVisible = useBalanceVisibility();
-
-  /* =========================
-     Month state
-     ========================= */
-  const [month, setMonth] = useState(
-    currentMonthKey()
-  );
-
-  /* =========================
-     Store subscriptions
-     ========================= */
-  const expenseSummary = useSyncExternalStore(
-    expenseStore.subscribe.bind(expenseStore),
-    () => expenseStore.getDashboardSummary(month)
-  );
-
-  const pocketSummaries = useSyncExternalStore(
-    pocketStore.subscribe.bind(pocketStore),
-    () => pocketStore.getAllPocketSummaries(month)
-  );
-
-  const topExpenses = useSyncExternalStore(
-    expenseStore.subscribe.bind(expenseStore),
-    () =>
-      expenseStore.getTopExpenseSummariesForMonth(
-        month,
-        3
-      )
-  );
-
-  const incomeFromRecords = useSyncExternalStore(
-    incomeStore.subscribe.bind(incomeStore),
-    () =>
-      incomeStore.getTotalIncomeForMonth(month)
-  );
-
   const salary = useSalary();
 
-  const totalIncome =
-    incomeFromRecords + (salary || 0);
+  const [month, setMonth] = useState(currentMonthKey());
 
-  const balance = useSyncExternalStore(
-    balanceStore.subscribe.bind(balanceStore),
-    balanceStore.getSnapshot.bind(balanceStore)
+  /* =========================
+     🔐 LEGAL STORE SUBSCRIPTIONS
+     ========================= */
+
+  const transactions = useSyncExternalStore(
+    transactionStore.subscribe.bind(transactionStore),
+    transactionStore.getSnapshot.bind(transactionStore)
+  );
+
+  useSyncExternalStore(
+    pocketStore.subscribe.bind(pocketStore),
+    pocketStore.getSnapshot.bind(pocketStore)
   );
 
   /* =========================
-     Derived values
+     Derived data (SAFE)
      ========================= */
-  const totalSpent =
-    expenseSummary.totalSpent;
 
-  const remaining =
-    totalIncome - totalSpent;
+  const pocketSummaries =
+    pocketStore.getAllPocketSummaries(month);
+
+  const incomeFromTransactions =
+    transactionStore.getIncomeForMonth(month);
+
+  const spentThisMonth =
+    transactionStore.getExpenseForMonth(month);
+
+  const balance =
+    transactionStore.getBalanceForMonth(month);
+
+  const totalIncome =
+    incomeFromTransactions + (salary || 0);
+
+  const daysRemaining = getDaysRemaining(month);
+
+  const remainingBalance = balance;
 
   const perDayAvailable =
-    expenseSummary.daysRemaining > 0
-      ? remaining /
-        expenseSummary.daysRemaining
+    daysRemaining > 0
+      ? remainingBalance / daysRemaining
       : 0;
 
-  const attentionPockets = pocketSummaries
-    .map(
-      ({
-        pocket,
-        allocated,
-        remaining,
-      }) => ({
-        pocket,
-        allocated,
-        remaining,
-        rank: getHealthRank(
-          remaining,
-          allocated
-        ),
-      })
+  const topExpenses = transactions
+    .filter(
+      t =>
+        !t.isDeleted &&
+        t.month === month &&
+        t.amount < 0
     )
-    .filter(item => item.rank < 3)
-    .sort((a, b) => a.rank - b.rank);
+    .sort(
+      (a, b) =>
+        Math.abs(b.amount) - Math.abs(a.amount)
+    )
+    .slice(0, 3)
+    .map(t => ({
+      id: t.id,
+      title:
+        t.source ||
+        t.category ||
+        'Expense',
+      amount: Math.abs(t.amount),
+    }));
+
+  const attentionPockets = pocketSummaries
+  .map(
+    ({ pocket, allocated, remaining }) => ({
+      pocket,
+      allocated,
+      remaining,
+      rank: getHealthRank(remaining, allocated),
+    })
+  )
+  .filter(item => item.rank < 3)
+  .sort((a, b) => a.rank - b.rank);
 
   const TOP_POCKETS = 3;
 
-  const topUsagePockets =
-    pocketSummaries
-      .filter(p => p.allocated > 0)
-      .sort((a, b) => {
-        const aPct =
-          (a.allocated - a.remaining) /
-          a.allocated;
-        const bPct =
-          (b.allocated - b.remaining) /
-          b.allocated;
-        return bPct - aPct;
-      })
-      .slice(0, TOP_POCKETS);
+  const topUsagePockets = pocketSummaries
+  .filter(p => p.allocated > 0)
+  .sort((a, b) => {
+    const aPct =
+      (a.allocated - a.remaining) / a.allocated;
+    const bPct =
+      (b.allocated - b.remaining) / b.allocated;
+    return bPct - aPct;
+  })
+  .slice(0, 3);
 
   const hasMorePockets =
-    pocketSummaries.length >
-    TOP_POCKETS;
+    pocketSummaries.length > TOP_POCKETS;
 
   /* =========================
      Render
      ========================= */
+
   return (
     <ScrollView
       style={{ backgroundColor: colors.background }}
@@ -150,9 +166,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       }}
       showsVerticalScrollIndicator={false}
     >
-      {/* =========================
-          OVERALL BALANCE
-         ========================= */}
+      {/* OVERALL BALANCE */}
       <View
         style={[
           styles.balanceCard,
@@ -197,9 +211,7 @@ export const DashboardScreen = ({ navigation }: any) => {
         </View>
       </View>
 
-      {/* =========================
-          MONTH SWITCHER
-         ========================= */}
+      {/* MONTH SWITCHER */}
       <View style={styles.monthRow}>
         <Pressable
           onPress={() =>
@@ -208,22 +220,10 @@ export const DashboardScreen = ({ navigation }: any) => {
             )
           }
         >
-          <Text
-            style={[
-              styles.monthNav,
-              { color: colors.primary },
-            ]}
-          >
-            ◀
-          </Text>
+          <Text style={styles.monthNav}>◀</Text>
         </Pressable>
 
-        <Text
-          style={[
-            styles.monthText,
-            { color: colors.textPrimary },
-          ]}
-        >
+        <Text style={styles.monthText}>
           {month}
         </Text>
 
@@ -234,20 +234,11 @@ export const DashboardScreen = ({ navigation }: any) => {
             )
           }
         >
-          <Text
-            style={[
-              styles.monthNav,
-              { color: colors.primary },
-            ]}
-          >
-            ▶
-          </Text>
+          <Text style={styles.monthNav}>▶</Text>
         </Pressable>
       </View>
 
-      {/* =========================
-          MONTHLY SUMMARY
-         ========================= */}
+      {/* MONTHLY SUMMARY */}
       <View
         style={[
           styles.monthlyCard,
@@ -255,57 +246,27 @@ export const DashboardScreen = ({ navigation }: any) => {
         ]}
       >
         <View style={styles.row}>
-          <Text
-            style={[
-              styles.label,
-              { color: colors.textMuted },
-            ]}
-          >
+          <Text style={styles.label}>
             Income
           </Text>
-          <Text
-            style={[
-              styles.positive,
-              { color: colors.primary },
-            ]}
-          >
+          <Text style={styles.positive}>
             {formatINR(totalIncome)}
           </Text>
         </View>
 
         <View style={styles.row}>
-          <Text
-            style={[
-              styles.label,
-              { color: colors.textMuted },
-            ]}
-          >
+          <Text style={styles.label}>
             Spent
           </Text>
-          <Text
-            style={[
-              styles.negative,
-              { color: colors.danger },
-            ]}
-          >
-            {formatINR(totalSpent)}
+          <Text style={styles.negative}>
+            {formatINR(spentThisMonth)}
           </Text>
         </View>
 
-        <View
-          style={[
-            styles.divider,
-            { backgroundColor: colors.divider },
-          ]}
-        />
+        <View style={styles.divider} />
 
         <View style={styles.row}>
-          <Text
-            style={[
-              styles.label,
-              { color: colors.textMuted },
-            ]}
-          >
+          <Text style={styles.label}>
             Remaining
           </Text>
           <Text
@@ -313,28 +274,41 @@ export const DashboardScreen = ({ navigation }: any) => {
               styles.positive,
               {
                 color:
-                  remaining < 0
+                  remainingBalance < 0
                     ? colors.danger
                     : colors.primary,
               },
             ]}
           >
-            {formatINR(remaining)}
+            {formatINR(remainingBalance)}
           </Text>
         </View>
       </View>
 
-      {/* =========================
-          BURN RATE
-         ========================= */}
+      {/* BURN RATE */}
       <BurnRateChip
-        daysRemaining={
-          expenseSummary.daysRemaining
-        }
+        daysRemaining={daysRemaining}
         perDayAvailable={perDayAvailable}
       />
 
       <TopExpenses items={topExpenses} />
+
+      <Pressable
+        onPress={() =>
+          navigation.navigate('Transactions')
+        }
+        style={{ alignSelf: 'flex-end', marginBottom: 16 }}
+      >
+        <Text
+          style={{
+            color: colors.primary,
+            fontSize: 14,
+            fontWeight: '600',
+          }}
+        >
+          View all transactions →
+        </Text>
+      </Pressable>
 
       <AttentionPockets
         items={attentionPockets}
@@ -346,9 +320,6 @@ export const DashboardScreen = ({ navigation }: any) => {
         }
       />
 
-      {/* =========================
-          WHERE YOUR MONEY GOES
-         ========================= */}
       {topUsagePockets.length > 0 && (
         <View style={{ marginBottom: 12 }}>
           <Text
@@ -400,7 +371,7 @@ export const DashboardScreen = ({ navigation }: any) => {
 };
 
 /* =========================
-   Static Styles ONLY
+   Styles
    ========================= */
 
 const styles = StyleSheet.create({
@@ -410,29 +381,23 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     alignItems: 'center',
   },
-
   balanceLabel: {
     fontSize: 14,
     marginBottom: 8,
   },
-
   balanceValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-
   balanceValue: {
     fontSize: 28,
     fontWeight: '800',
   },
-
   eye: {
     fontSize: 18,
-    color: colors.textMuted,
     opacity: 0.8,
   },
-
   monthRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -440,43 +405,41 @@ const styles = StyleSheet.create({
     gap: 16,
     marginBottom: 12,
   },
-
   monthText: {
     fontSize: 16,
     fontWeight: '700',
+    color: colors.textPrimary,
   },
-
   monthNav: {
     fontSize: 18,
     fontWeight: '700',
+    color: colors.primary,
   },
-
   monthlyCard: {
     borderRadius: 14,
     padding: 16,
     marginBottom: 16,
   },
-
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-
   label: {
     fontSize: 14,
+    color: colors.textMuted,
   },
-
   divider: {
     height: 1,
     marginVertical: 8,
+    backgroundColor: colors.divider,
   },
-
   positive: {
     fontWeight: '700',
+    color: colors.primary,
   },
-
   negative: {
     fontWeight: '700',
+    color: colors.danger,
   },
 });

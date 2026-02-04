@@ -1,30 +1,26 @@
-// src/store/pocket/pocketStore.ts
 import { Pocket } from '../../types/pocket';
-import * as pocketAdapter from '../../db/pocket.adapter';
-import { expenseStore } from '../expense/expenseStore.instance';
 import { invariant } from '../../utils/invariant';
+import {
+  getPockets,
+  addPocket as addPocketRow,
+  deletePocket as deletePocketRow,
+} from '../../db/pocket.adapter';
+import { transactionStore } from '../transaction/transactionStore.instance';
 
+/**
+ * PocketStore
+ *
+ * - Owns pocket definitions (id, name, allocated)
+ * - Does NOT own money
+ * - Spent is derived from TransactionStore
+ */
 export class PocketStore {
-  private version = 0;
-  private selectorCache = new Map<
-    string,
-    { version: number; value: any }
-  >();
-
   private pockets = new Map<string, Pocket>();
   private listeners = new Set<() => void>();
   private snapshot: Pocket[] = [];
 
-  constructor() {
-    // Recompute pocket-derived selectors when expenses change
-    expenseStore.subscribe(() => {
-      this.bumpVersion();
-      this.emit();
-    });
-  }
-
   /* =========================
-     React subscription
+     Subscription
      ========================= */
 
   subscribe(listener: () => void) {
@@ -38,222 +34,103 @@ export class PocketStore {
   }
 
   getSnapshot() {
+    console.log('[SNAPSHOT]', 'PocketStore');
     return this.snapshot;
   }
 
   /* =========================
-     Hydration (SQLite)
+     Hydration
      ========================= */
 
   hydrateFromSQLite() {
-  const pockets = pocketAdapter.getPockets();
+    const rows = getPockets();
+    this.pockets.clear();
 
-  this.pockets.clear();
-  for (const p of pockets) {
-    // 🔒 invariants
-    invariant(p.id, 'Hydrated pocket missing id');
-    invariant(
-      p.name?.trim().length > 0,
-      'Hydrated pocket missing name'
-    );
-    invariant(
-      Number.isFinite(p.allocated),
-      'Hydrated pocket allocated must be finite'
-    );
-    invariant(
-      p.allocated >= 0,
-      'Hydrated pocket allocated cannot be negative'
-    );
+    for (const p of rows) {
+      invariant(p.id, 'Pocket missing id');
+      invariant(p.name, 'Pocket missing name');
+      invariant(
+        Number.isFinite(p.allocated),
+        'Pocket allocated invalid'
+      );
 
-    this.pockets.set(p.id, p);
+      this.pockets.set(p.id, {
+        id: p.id,
+        name: p.name,
+        allocated: p.allocated,
+        spent: 0, // derived, never stored
+      });
+    }
+
+    this.emit();
   }
-  this.bumpVersion();
-  this.emit();
-}
-
 
   /* =========================
-     Writes (SQLite)
+     Writes
      ========================= */
 
-  addPocket(pocket: Pocket) {
-    // 🔒 invariants
+  async addPocket(pocket: Pocket) {
     invariant(pocket.id, 'Pocket must have id');
-    invariant(
-      pocket.name?.trim().length > 0,
-      'Pocket name is required'
-    );
-    invariant(
-      Number.isFinite(pocket.allocated),
-      'Pocket allocated must be finite'
-    );
-    invariant(
-      pocket.allocated >= 0,
-      'Pocket allocated cannot be negative'
-    );
+    invariant(pocket.name, 'Pocket must have name');
 
-    pocketAdapter.addPocket(pocket);
+    await addPocketRow(pocket);
     this.pockets.set(pocket.id, pocket);
-    this.bumpVersion();
     this.emit();
   }
 
-  updatePocket(pocket: Pocket) {
-    const existing = this.pockets.get(pocket.id);
+  deletePocket(pocketId: string) {
+    invariant(this.pockets.has(pocketId), 'Pocket not found');
 
-    invariant(
-      existing,
-      `Pocket ${pocket.id} does not exist`
-    );
-
-    invariant(
-      pocket.name?.trim().length > 0,
-      'Pocket name is required'
-    );
-    invariant(
-      Number.isFinite(pocket.allocated),
-      'Pocket allocated must be finite'
-    );
-    invariant(
-      pocket.allocated >= 0,
-      'Pocket allocated cannot be negative'
-    );
-
-    pocketAdapter.updatePocket(pocket);
-    this.pockets.set(pocket.id, pocket);
-    this.bumpVersion();
-    this.emit();
-  }
-
-  deletePocket(id: string) {
-    const pocket = this.pockets.get(id);
-
-    invariant(
-      pocket,
-      `Pocket ${id} does not exist`
-    );
-
-    // ❗ Critical invariant:
-    // A pocket with ANY active expenses (any month) cannot be deleted
-    const hasActiveExpense = (() => {
-      for (const e of expenseStore.getSnapshot()) {
-        if (
-          e.pocketId === id &&
-          !e.isDeleted
-        ) {
-          return true;
-        }
-      }
-      return false;
-    })();
-
-    invariant(
-      !hasActiveExpense,
-      'Cannot delete pocket with existing expenses'
-    );
-
-    pocketAdapter.deletePocket(id);
-    this.pockets.delete(id);
-    this.bumpVersion();
+    deletePocketRow(pocketId);
+    this.pockets.delete(pocketId);
     this.emit();
   }
 
   /* =========================
-     Selectors (unchanged)
+     Reads (derived)
      ========================= */
+
+  getPocketById(id: string) {
+    return this.pockets.get(id) ?? null;
+  }
 
   getPocketSummaryForMonth(
     pocketId: string,
     month: string
   ) {
-    return this.memo(
-      `summary:${pocketId}:${month}`,
-      () => {
-        const pocket = this.pockets.get(pocketId);
-        if (!pocket) return null;
+    const pocket = this.pockets.get(pocketId);
+    if (!pocket) return null;
 
-        const spent = (() => {
-          let total = 0;
+    const spent =
+      transactionStore.getTotalSpentForPocketInMonth(
+        pocketId,
+        month
+      );
 
-          for (const e of expenseStore.getSnapshot()) {
-            if (
-              e.pocketId === pocketId &&
-              e.month === month &&
-              !e.isDeleted &&
-              e.amount < 0
-            ) {
-              total += Math.abs(e.amount);
-            }
-          }
+    return {
+      pocket,
+      allocated: pocket.allocated,
+      remaining: pocket.allocated - spent,
+    };
+  }
 
-          return total;
-        })();
+  getAllPocketSummaries(month: string) {
+    return Array.from(this.pockets.values()).map(
+      pocket => {
+        const spent =
+          transactionStore.getTotalSpentForPocketInMonth(
+            pocket.id,
+            month
+          );
 
         return {
           pocket,
           allocated: pocket.allocated,
-          spent,
           remaining: pocket.allocated - spent,
         };
       }
     );
   }
-
-  getAllPocketSummaries(month: string) {
-    return this.memo(
-      `all:${month}`,
-      () =>
-        Array.from(this.pockets.values()).map(pocket => {
-          let spent = 0;
-
-          for (const e of expenseStore.getSnapshot()) {
-            if (
-              e.pocketId === pocket.id &&
-              e.month === month &&
-              !e.isDeleted &&
-              e.amount < 0
-            ) {
-              spent += Math.abs(e.amount);
-            }
-          }
-
-          return {
-            pocket,
-            allocated: pocket.allocated,
-            spent,
-            remaining:
-              pocket.allocated - spent,
-          };
-        })
-    );
-  }
-
-  /* =========================
-     Internals
-     ========================= */
-
-  private bumpVersion() {
-    this.version++;
-    this.selectorCache.clear();
-  }
-
-  private memo<T>(
-    key: string,
-    compute: () => T
-  ): T {
-    const cached = this.selectorCache.get(key);
-    if (
-      cached &&
-      cached.version === this.version
-    ) {
-      return cached.value;
-    }
-
-    const value = compute();
-    this.selectorCache.set(key, {
-      version: this.version,
-      value,
-    });
-    return value;
-  }
 }
+
+export const pocketStore = new PocketStore();

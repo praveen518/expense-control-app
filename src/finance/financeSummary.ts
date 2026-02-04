@@ -1,5 +1,4 @@
-import { expenseStore } from '../store/expense/expenseStore.instance';
-// import { getSalary } from '../store/settingsStore';
+import { transactionStore } from '../store/transaction/transactionStore.instance';
 import { getCurrentMonth } from '../utils/month';
 
 /* =========================
@@ -7,30 +6,33 @@ import { getCurrentMonth } from '../utils/month';
    ========================= */
 
 export function getTotalBalance(): number {
-  const expenses = expenseStore.getSnapshot();
+  const transactions =
+    transactionStore.getSnapshot();
 
-  return expenses
-    .filter(e => !e.deletedAt)
-    .reduce((sum, e) => sum + e.amount, 0);
+  return transactions
+    .filter(t => !t.isDeleted)
+    .reduce((sum, t) => sum + t.amount, 0);
 }
 
 /* =========================
    INCOME (THIS MONTH)
    ========================= */
 
-export function getMonthlyIncome(month: string = getCurrentMonth()) {
-  const expenses = expenseStore.getSnapshot();
+export function getMonthlyIncome(
+  month: string = getCurrentMonth()
+): number {
+  const transactions =
+    transactionStore.getSnapshot();
 
-  return expenses
+  return transactions
     .filter(
-      e =>
-        !e.deletedAt &&
-        e.month === month &&
-        e.amount > 0
+      t =>
+        !t.isDeleted &&
+        t.month === month &&
+        t.amount > 0
     )
-    .reduce((sum, e) => sum + e.amount, 0);
+    .reduce((sum, t) => sum + t.amount, 0);
 }
-
 
 /* =========================
    SPENT (THIS MONTH)
@@ -39,14 +41,18 @@ export function getMonthlyIncome(month: string = getCurrentMonth()) {
 export function getMonthlySpent(
   month: string = getCurrentMonth()
 ): number {
-  const expenses = expenseStore.getSnapshot();
+  const transactions =
+    transactionStore.getSnapshot();
 
-  return expenses
+  return transactions
     .filter(
-      e =>
-        !e.deletedAt &&
-        e.month === month &&
-        e.amount < 0
+      t =>
+        !t.isDeleted &&
+        t.month === month &&
+        t.amount < 0
     )
-    .reduce((sum, e) => sum + Math.abs(e.amount), 0);
+    .reduce(
+      (sum, t) => sum + Math.abs(t.amount),
+      0
+    );
 }

@@ -1,58 +1,48 @@
 import React, { useState } from 'react';
 import {
-  Modal,
   View,
   Text,
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
+  Modal,
 } from 'react-native';
-import { Expense } from '../types/expense';
+import { v4 as uuid } from 'uuid';
+
+import { transactionStore } from '../store/transaction/transactionStore.instance';
 import { colors } from '../themes/colors';
+import { useThemeMode } from '../store/settings/themeStore';
 
-interface Props {
-  visible: boolean;
-  pocketId: string;
-  month: string;
-  onClose: () => void;
-  onSubmit: (expense: Expense) => void;
-}
-
-export function AddExpenseModal({
+export const AddExpenseModal = ({
   visible,
   pocketId,
   month,
   onClose,
-  onSubmit,
-}: Props) {
+}: any) => {
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  useThemeMode();
 
   const submit = () => {
     const value = Number(
       amount.replace(/[^0-9]/g, '')
     );
-
-    if (!Number.isFinite(value) || value <= 0) {
+    if (!Number.isFinite(value) || value <= 0)
       return;
-    }
 
     const now = Date.now();
 
-    const expense: Expense = {
-      id: now.toString(),
+    transactionStore.addTransaction({
+      id: uuid(),
+      type: 'expense',
+      amount: -value,
       pocketId,
-      amount: -value, // 🔴 expense = negative
+      source: note || 'Expense',
       month,
       date: now,
       createdAt: now,
       isDeleted: false,
-      note: note.trim() || undefined,
-    };
-
-    onSubmit(expense);
+    });
 
     setAmount('');
     setNote('');
@@ -63,108 +53,131 @@ export function AddExpenseModal({
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      animationType="fade"
     >
-      <KeyboardAvoidingView
-        behavior={
-          Platform.OS === 'ios' ? 'padding' : undefined
-        }
-        style={styles.overlay}
+      <Pressable
+        style={[
+          styles.backdrop,
+          {
+            backgroundColor:
+              colors.background + 'CC',
+          },
+        ]}
+        onPress={onClose}
       >
-        <View style={styles.sheet}>
-          <Text style={styles.title}>
-            Add Expense
+        <Pressable
+          style={[
+            styles.card,
+            { backgroundColor: colors.surfaceSoft },
+          ]}
+          onPress={() => {}}
+        >
+          <Text
+            style={[
+              styles.title,
+              { color: colors.textPrimary },
+            ]}
+          >
+            Add expense
           </Text>
 
           <TextInput
-            placeholder="Amount"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="numeric"
             value={amount}
             onChangeText={setAmount}
-            style={styles.input}
-            autoFocus
+            keyboardType="numeric"
+            placeholder="Amount"
+            placeholderTextColor={
+              colors.textMuted
+            }
+            style={[
+              styles.input,
+              {
+                backgroundColor:
+                  colors.surface,
+                color: colors.textPrimary,
+              },
+            ]}
           />
 
           <TextInput
-            placeholder="Note (optional)"
-            placeholderTextColor={colors.textMuted}
             value={note}
             onChangeText={setNote}
-            style={[styles.input, styles.note]}
-            maxLength={100}
+            placeholder="Note (optional)"
+            placeholderTextColor={
+              colors.textMuted
+            }
+            style={[
+              styles.input,
+              {
+                backgroundColor:
+                  colors.surface,
+                color: colors.textPrimary,
+              },
+            ]}
           />
 
           <View style={styles.actions}>
             <Pressable onPress={onClose}>
-              <Text style={styles.cancel}>
+              <Text
+                style={[
+                  styles.cancel,
+                  { color: colors.textMuted },
+                ]}
+              >
                 Cancel
               </Text>
             </Pressable>
 
             <Pressable onPress={submit}>
-              <Text style={styles.add}>
-                Add
+              <Text
+                style={[
+                  styles.save,
+                  { color: colors.primary },
+                ]}
+              >
+                Save
               </Text>
             </Pressable>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
-}
+};
 
+/* Only layout / spacing here */
 const styles = StyleSheet.create({
-  overlay: {
+  backdrop: {
     flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-
-  sheet: {
-    backgroundColor: colors.surface,
+    justifyContent: 'center',
     padding: 16,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
   },
-
+  card: {
+    borderRadius: 14,
+    padding: 16,
+  },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.textPrimary,
     marginBottom: 12,
   },
-
   input: {
-    borderWidth: 1,
-    borderColor: colors.divider,
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderRadius: 10,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-    color: colors.textPrimary,
-    backgroundColor: colors.surface,
-  },
-
-  note: {
     fontSize: 14,
   },
-
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 20,
+    marginTop: 20,
   },
-
   cancel: {
-    color: colors.textMuted,
-    fontSize: 16,
+    fontWeight: '600',
   },
-
-  add: {
-    color: colors.primary,
-    fontSize: 16,
+  save: {
     fontWeight: '700',
   },
 });

@@ -1,25 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   TextInput,
   Pressable,
   StyleSheet,
-  Animated, 
-  Platform
+  Animated,
 } from 'react-native';
+import { useSyncExternalStore } from 'react';
 
-import { useSalary } from '../hooks/useSettings';
-import { setSalary } from '../store/settingsStore';
+import { transactionStore } from '../store/transaction/transactionStore.instance';
+import { upsertSalaryForMonth } from '../store/transaction/salary.action';
+
+import { getCurrentMonth } from '../utils/month';
 import { formatINR } from '../utils/currency';
 import { colors } from '../themes/colors';
+import { authLockStore } from '../auth/authLock.store';
 import { themeStore, useThemeMode } from '../store/settings/themeStore';
 
+/* =========================
+   Radio Indicator
+   ========================= */
 const RadioIndicator = ({ selected }: { selected: boolean }) => {
-  const scale = React.useRef(new Animated.Value(0.8)).current;
-  const opacity = React.useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.8)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
 
-  React.useEffect(() => {
+  useEffect(() => {
     Animated.parallel([
       Animated.spring(scale, {
         toValue: selected ? 1 : 0.8,
@@ -31,7 +37,7 @@ const RadioIndicator = ({ selected }: { selected: boolean }) => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [selected]);
+  }, [opacity, scale, selected]);
 
   return (
     <View style={styles.radioOuter}>
@@ -49,35 +55,51 @@ const RadioIndicator = ({ selected }: { selected: boolean }) => {
 };
 
 export const SettingsScreen = () => {
-  const salary = useSalary();
-  const themeMode = useThemeMode(); // 🔑 re-render on theme change
+  const themeMode = useThemeMode();
+  const currentMonth = getCurrentMonth();
+
+  /* =========================
+     Salary (from ledger)
+     ========================= */
+
+  const salary = useSyncExternalStore(
+    transactionStore.subscribe.bind(transactionStore),
+    () =>
+      transactionStore
+        .getSnapshot()
+        .filter(
+          t =>
+            t.source === 'Salary' &&
+            t.month === currentMonth &&
+            !t.isDeleted
+        )
+        .reduce((sum, t) => sum + t.amount, 0)
+  );
 
   const [isEditing, setIsEditing] = useState(false);
   const [draftSalary, setDraftSalary] = useState('');
 
   useEffect(() => {
     if (!isEditing) {
-      setDraftSalary(
-        typeof salary === 'number' ? String(salary) : ''
-      );
+      setDraftSalary(salary > 0 ? String(salary) : '');
     }
   }, [salary, isEditing]);
 
-  const onSave = async () => {
+  const onSave = () => {
     const value = Number(
       draftSalary.replace(/[^0-9]/g, '')
     );
 
-    if (!Number.isFinite(value) || value <= 0) return;
+    if (!Number.isFinite(value) || value <= 0) {
+      return;
+    }
 
-    await setSalary(value);
+    upsertSalaryForMonth(value, new Date());
     setIsEditing(false);
   };
 
   const onCancel = () => {
-    setDraftSalary(
-      typeof salary === 'number' ? String(salary) : ''
-    );
+    setDraftSalary(salary > 0 ? String(salary) : '');
     setIsEditing(false);
   };
 
@@ -124,7 +146,7 @@ export const SettingsScreen = () => {
                 { color: colors.textPrimary },
               ]}
             >
-              {typeof salary === 'number' && salary > 0
+              {salary > 0
                 ? formatINR(salary)
                 : 'Not set'}
             </Text>
@@ -223,41 +245,51 @@ export const SettingsScreen = () => {
           { backgroundColor: colors.surfaceSoft },
         ]}
       >
-        {(['light', 'dark', 'system'] as const).map(mode => (
-  <Pressable
-    key={mode}
-    onPress={() => {
-      themeStore.setThemeMode(mode);
-    }}
-    android_ripple={{ color: colors.divider }}
-    style={styles.themeRow}
-  >
-    <Text
-      style={[
-        styles.label,
-        { color: colors.textPrimary },
-      ]}
-    >
-      {mode === 'system'
-        ? 'System Default'
-        : mode.charAt(0).toUpperCase() +
-          mode.slice(1)}
-    </Text>
+        {(['light', 'dark', 'system'] as const).map(
+          mode => (
+            <Pressable
+              key={mode}
+              onPress={() =>
+                themeStore.setThemeMode(mode)
+              }
+              android_ripple={{
+                color: colors.divider,
+              }}
+              style={styles.themeRow}
+            >
+              <Text
+                style={[
+                  styles.label,
+                  { color: colors.textPrimary },
+                ]}
+              >
+                {mode === 'system'
+                  ? 'System Default'
+                  : mode.charAt(0).toUpperCase() +
+                    mode.slice(1)}
+              </Text>
 
-    <View style={styles.radioSlot}>
-      <RadioIndicator
-        selected={themeMode === mode}
-      />
-    </View>
-  </Pressable>
-))}
+              <View style={styles.radioSlot}>
+                <RadioIndicator
+                  selected={themeMode === mode}
+                />
+              </View>
+            </Pressable>
+          )
+        )}
       </View>
+
+      <Pressable onPress={() => authLockStore.lock()}>
+        <Text style={{ color: colors.primary }}>
+          Logout
+        </Text>
+      </Pressable>
     </View>
   );
 };
 
 /* =========================
-   STATIC STYLES ONLY
+   Styles
    ========================= */
 
 const styles = StyleSheet.create({
@@ -323,28 +355,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  tickSlot: {
-    width: 24,
-    alignItems: 'flex-end',
-  },
-  
-  tick: {
-    fontSize: 16,      // ⬇ reduce from 18
-    fontWeight: '700',
-    lineHeight: 16,    // 🔑 prevents vertical expansion
-  },
   themeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 44, // 🔒 fixed height
+    height: 44,
   },
-  
+
   radioSlot: {
     width: 24,
     alignItems: 'flex-end',
   },
-  
+
   radioOuter: {
     width: 18,
     height: 18,
@@ -354,7 +376,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  
+
   radioInner: {
     width: 8,
     height: 8,

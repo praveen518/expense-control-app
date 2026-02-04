@@ -11,11 +11,17 @@ import {
 import { useSyncExternalStore } from 'react';
 
 import { pocketStore } from '../store/pocket/pocketStore.instance';
+import { transactionStore } from '../store/transaction/transactionStore.instance';
+
 import { formatINR } from '../utils/currency';
 import { getCurrentMonth } from '../utils/month';
 import { colors } from '../themes/colors';
 import { showPocketActions } from '../utils/showPocketActions';
 import { useThemeMode } from '../store/settings/themeStore';
+
+/* =========================
+   Types
+   ========================= */
 
 type PocketSummary = {
   pocket: {
@@ -27,8 +33,9 @@ type PocketSummary = {
 };
 
 /* =========================
-   Pocket Row (HOOK SAFE)
+   Pocket Row
    ========================= */
+
 const PocketRow = ({
   item,
   navigation,
@@ -55,7 +62,6 @@ const PocketRow = ({
       ? '#f59e0b'
       : colors.primary;
 
-  /* animation (VALID here) */
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -64,7 +70,7 @@ const PocketRow = ({
       duration: 250,
       useNativeDriver: false,
     }).start();
-  }, [percentLabel]);
+  }, [anim, percentLabel]);
 
   const widthInterpolated = anim.interpolate({
     inputRange: [0, 100],
@@ -97,10 +103,7 @@ const PocketRow = ({
     >
       <View style={styles.row}>
         <Text
-          style={[
-            styles.name,
-            { color: colors.textPrimary },
-          ]}
+          style={[styles.name, { color: colors.textPrimary }]}
           numberOfLines={1}
         >
           {pocket.name}
@@ -146,15 +149,50 @@ const PocketRow = ({
   );
 };
 
+/* =========================
+   Screen
+   ========================= */
+
 export const PocketsScreen = ({ navigation }: any) => {
   useThemeMode();
 
   const currentMonth = getCurrentMonth();
 
-  const pocketSummaries = useSyncExternalStore(
+  /* ✅ Correct subscriptions */
+  const pockets = useSyncExternalStore(
     pocketStore.subscribe.bind(pocketStore),
-    () => pocketStore.getAllPocketSummaries(currentMonth)
+    pocketStore.getSnapshot.bind(pocketStore)
   );
+
+  const transactions = useSyncExternalStore(
+    transactionStore.subscribe.bind(transactionStore),
+    transactionStore.getSnapshot.bind(transactionStore)
+  );
+
+  /* ✅ Derived summaries */
+  const pocketSummaries: PocketSummary[] = useMemo(() => {
+    return pockets.map(pocket => {
+      const spent = transactions.reduce(
+        (sum, t) =>
+          !t.isDeleted &&
+          t.type === 'expense' &&
+          t.pocketId === pocket.id &&
+          t.month === currentMonth
+            ? sum + Math.abs(t.amount)
+            : sum,
+        0
+      );
+
+      return {
+        pocket: {
+          id: pocket.id,
+          name: pocket.name,
+        },
+        allocated: pocket.allocated,
+        remaining: pocket.allocated - spent,
+      };
+    });
+  }, [pockets, transactions, currentMonth]);
 
   const [query, setQuery] = React.useState('');
   const [sortMode, setSortMode] =
@@ -195,7 +233,6 @@ export const PocketsScreen = ({ navigation }: any) => {
         { backgroundColor: colors.background },
       ]}
     >
-      {/* Search + Sort */}
       <View style={styles.controls}>
         <TextInput
           placeholder="Search pockets"
@@ -242,7 +279,6 @@ export const PocketsScreen = ({ navigation }: any) => {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Sticky CTA */}
       <View
         style={[
           styles.sticky,
@@ -269,75 +305,48 @@ export const PocketsScreen = ({ navigation }: any) => {
 };
 
 /* =========================
-   Styles
+   Styles (unchanged)
    ========================= */
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-
-  controls: {
-    marginBottom: 12,
-  },
-
+  container: { flex: 1, padding: 16 },
+  controls: { marginBottom: 12 },
   search: {
     borderWidth: 1,
     borderRadius: 8,
     padding: 10,
     marginBottom: 8,
   },
-
-  item: {
-    marginBottom: 20,
-  },
-
+  item: { marginBottom: 20 },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 6,
   },
-
   name: {
     fontSize: 15,
     fontWeight: '600',
     flex: 1,
     marginRight: 8,
   },
-
   right: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-
-  alert: {
-    fontSize: 14,
-  },
-
-  percent: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-
+  alert: { fontSize: 14 },
+  percent: { fontSize: 13, fontWeight: '700' },
   progressTrack: {
     height: 6,
     borderRadius: 3,
     backgroundColor: '#e5e7eb',
     overflow: 'hidden',
   },
-
   progressFill: {
     height: '100%',
     borderRadius: 3,
   },
-
-  subText: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-
+  subText: { fontSize: 12, marginTop: 4 },
   sticky: {
     position: 'absolute',
     left: 0,
@@ -347,7 +356,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
   },
-
   addText: {
     fontSize: 16,
     fontWeight: '600',

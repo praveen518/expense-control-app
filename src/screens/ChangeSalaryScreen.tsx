@@ -9,7 +9,9 @@ import {
 } from 'react-native';
 
 import { useSalary } from '../hooks/useSettings';
-import { setSalary } from '../store/settingsStore';
+import { upsertSalaryForMonth } from
+  '../store/transaction/salary.action';
+
 import { colors } from '../themes/colors';
 
 export const ChangeSalaryScreen = ({ navigation }: any) => {
@@ -28,9 +30,10 @@ export const ChangeSalaryScreen = ({ navigation }: any) => {
       return;
     }
 
-    await setSalary(value);
+    upsertSalaryForMonth(value, new Date());
     navigation.goBack();
   };
+
 
   return (
     <View style={styles.container}>

@@ -207,6 +207,180 @@ const migrations: Migration[] = [
       `);
     },
   },
+  // ───────────────────────────────
+  // v3 → v4 : global app PIN lock
+  // ───────────────────────────────
+  {
+    from: 3,
+    to: 4,
+    run: () => {
+      QuickSQLite.execute(DB_NAME, `
+        CREATE TABLE IF NOT EXISTS auth_lock (
+          scope TEXT PRIMARY KEY,     -- 'GLOBAL' now, 'USER' later
+          scope_id TEXT,              -- null for GLOBAL
+          pin_hash TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+      `);
+    },
+  },
+  {
+    from: 4,
+    to: 5,
+    run: () => {
+      // 1️⃣ Create transactions table
+      QuickSQLite.execute(DB_NAME, `
+        CREATE TABLE IF NOT EXISTS transactions (
+          id TEXT PRIMARY KEY,
+          amount REAL NOT NULL,
+          type TEXT CHECK(type IN ('income','expense')) NOT NULL,
+
+          pocketId TEXT,
+          source TEXT,
+          category TEXT,
+
+          month TEXT NOT NULL,
+          date INTEGER NOT NULL,
+
+          createdAt INTEGER NOT NULL,
+          updatedAt INTEGER,
+          deletedAt INTEGER,
+          isDeleted INTEGER NOT NULL DEFAULT 0
+        );
+      `);
+
+      // 2️⃣ Migrate INCOME → TRANSACTIONS (ONE TIME, SAFE)
+      QuickSQLite.execute(DB_NAME, `
+        INSERT INTO transactions (
+          id,
+          amount,
+          type,
+          source,
+          month,
+          date,
+          createdAt,
+          updatedAt,
+          deletedAt,
+          isDeleted
+        )
+        SELECT
+          id,
+          amount,
+          'income',
+          source,
+          month,
+          date,
+          createdAt,
+          updatedAt,
+          deletedAt,
+          isDeleted
+        FROM income
+        WHERE id NOT IN (
+          SELECT id FROM transactions
+        );
+      `);
+    },
+  },
+  {
+  from: 5,
+  to: 6,
+  run: async () => {
+    // 1️⃣ Read salary from legacy settings
+    const raw = await AsyncStorage.getItem(
+      'settings.salary'
+    );
+
+    const salary = raw ? Number(raw) : NaN;
+    if (!Number.isFinite(salary) || salary <= 0) {
+      return;
+    }
+
+    // 2️⃣ Compute current month key
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const monthKey = `${y}-${m}`;
+
+    const salaryTxId = `salary-${monthKey}`;
+    const ts = Date.now();
+
+    // 3️⃣ Insert salary transaction ONCE
+    QuickSQLite.execute(DB_NAME, `
+      INSERT OR IGNORE INTO transactions (
+        id,
+        amount,
+        type,
+        source,
+        month,
+        date,
+        createdAt,
+        updatedAt,
+        isDeleted
+      ) VALUES (
+        '${salaryTxId}',
+        ${salary},
+        'income',
+        'Salary',
+        '${monthKey}',
+        ${ts},
+        ${ts},
+        ${ts},
+        0
+      );
+    `);
+  },
+},
+{
+  from: 6,
+  to: 7,
+  run: () => {
+    /**
+     * Migrate expenses → transactions
+     *
+     * Rules:
+     * - expense.amount becomes NEGATIVE
+     * - type = 'expense'
+     * - pocketId preserved
+     * - id preserved
+     * - soft delete preserved
+     */
+
+    QuickSQLite.execute(DB_NAME, `
+      INSERT INTO transactions (
+        id,
+        amount,
+        type,
+        pocketId,
+        source,
+        category,
+        month,
+        date,
+        createdAt,
+        updatedAt,
+        deletedAt,
+        isDeleted
+      )
+      SELECT
+        e.id,
+        -ABS(e.amount),              -- 🔑 NEGATIVE
+        'expense',
+        e.pocketId,
+        e.note,
+        NULL,
+        e.month,
+        e.date,
+        e.createdAt,
+        e.updatedAt,
+        e.deletedAt,
+        e.isDeleted
+      FROM expenses e
+      WHERE e.id NOT IN (
+        SELECT id FROM transactions
+      );
+    `);
+  },
+},
+
 ];
 
 export async function runMigrations() {

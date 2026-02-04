@@ -10,14 +10,16 @@ import { UndoDeleteBanner } from '../components/UndoDeleteBanner';
 
 import { openDB } from '../db/db';
 
-import { expenseStore } from '../store/expense/expenseStore.instance';
 import { pocketStore } from '../store/pocket/pocketStore.instance';
 import { loadSettings } from '../store/settingsStore';
 import { runMigrations } from '../db/migrations';
 import { incomeStore } from '../store/income/incomeStore.instance';
 import { balanceStore } from '../store/balance/balanceStore.instance';
 import { themeStore, useThemeMode } from '../store/settings/themeStore';
+import { LockGate } from '../auth/LockGate';
+import { authLockStore } from '../auth/authLock.store';
 import { resolveTheme } from '../themes/theme';
+import { transactionStore } from '../store/transaction/transactionStore.instance';
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -45,9 +47,10 @@ export default function App() {
       // 2️⃣ Database + expenses
       openDB();
       await runMigrations();
-      expenseStore.hydrateFromSQLite();
+      authLockStore.hydrateFromSQLite();
       pocketStore.hydrateFromSQLite();
       incomeStore.hydrateFromSQLite();
+      transactionStore.hydrateFromSQLite();
       await balanceStore.hydrate();
       await themeStore.hydrate();
       setReady(true);
@@ -63,10 +66,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <View style={styles.root}>
-        <NavigationContainer theme={navTheme}>
-          <AppNavigator />
-        </NavigationContainer>
-
+        <LockGate>
+          <NavigationContainer theme={navTheme}>
+            <AppNavigator />
+          </NavigationContainer>
+        </LockGate>
         <UndoDeleteBanner />
       </View>
     </SafeAreaProvider>

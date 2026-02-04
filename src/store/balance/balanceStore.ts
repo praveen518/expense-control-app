@@ -46,6 +46,7 @@ export class BalanceStore {
   }
 
   getSnapshot() {
+    console.log('[SNAPSHOT]', 'BalanceStore');
     return this.balance;
   }
 

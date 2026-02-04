@@ -4,261 +4,265 @@ import {
   Text,
   StyleSheet,
   Pressable,
+  ScrollView,
 } from 'react-native';
 import { useSyncExternalStore } from 'react';
 
 import { pocketStore } from '../store/pocket/pocketStore.instance';
-import { expenseStore } from '../store/expense/expenseStore.instance';
+import { transactionStore } from '../store/transaction/transactionStore.instance';
 
 import { formatINR } from '../utils/currency';
 import { getCurrentMonth } from '../utils/month';
 import { AddExpenseModal } from '../components/AddExpenseModal';
 import { colors } from '../themes/colors';
+import { useThemeMode } from '../store/settings/themeStore';
 
 export const PocketDetailScreen = ({ route }: any) => {
+  useThemeMode();
   const { pocketId } = route.params;
-
   const [addOpen, setAddOpen] = useState(false);
   const currentMonth = getCurrentMonth();
 
-  /* =========================
-     Store subscriptions
-     ========================= */
-
-  const pocketSummary = useSyncExternalStore(
+  const pockets = useSyncExternalStore(
     pocketStore.subscribe.bind(pocketStore),
-    () =>
-      pocketStore.getPocketSummaryForMonth(
-        pocketId,
-        currentMonth
-      )
+    pocketStore.getSnapshot.bind(pocketStore)
   );
 
-  const pocketExpenses = useSyncExternalStore(
-    expenseStore.subscribe.bind(expenseStore),
-    () =>
-      expenseStore.getExpensesForPocketInMonth(
-        pocketId,
-        currentMonth
-      )
+  const transactions = useSyncExternalStore(
+    transactionStore.subscribe.bind(transactionStore),
+    transactionStore.getSnapshot.bind(transactionStore)
   );
 
-  if (!pocketSummary) {
+  const pocket = pockets.find(p => p.id === pocketId);
+  if (!pocket) {
     return (
       <View style={styles.center}>
-        <Text style={styles.muted}>
+        <Text style={{ color: colors.textMuted }}>
           Pocket not found
         </Text>
       </View>
     );
   }
 
-  const { pocket, allocated, remaining } =
-    pocketSummary;
+  const pocketExpenses = transactions
+    .filter(
+      t =>
+        !t.isDeleted &&
+        t.type === 'expense' &&
+        t.pocketId === pocketId &&
+        t.month === currentMonth
+    )
+    .sort((a, b) => b.date - a.date);
 
-  const deleteExpense = (id: string) => {
-    expenseStore.deleteExpense(id);
-  };
+  const spent = pocketExpenses.reduce(
+    (sum, t) => sum + Math.abs(t.amount),
+    0
+  );
+  const remaining = pocket.allocated - spent;
 
   return (
-    <View style={styles.screen}>
-      {/* =========================
-          Header
-         ========================= */}
-      <View style={styles.header}>
-        <Text style={styles.title}>
-          {pocket.name}
-        </Text>
-
-        <Text style={styles.sub}>
-          Allocated: {formatINR(allocated)}
-        </Text>
-
-        <Text
+    <View
+      style={[
+        styles.screen,
+        { backgroundColor: colors.background },
+      ]}
+    >
+      <ScrollView
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: 96,
+        }}
+      >
+        <View
           style={[
-            styles.remaining,
-            remaining < 0
-              ? styles.negative
-              : styles.positive,
+            styles.card,
+            { backgroundColor: colors.surfaceSoft },
           ]}
         >
-          Remaining: {formatINR(remaining)}
-        </Text>
-      </View>
-
-      {/* =========================
-          Expense list
-         ========================= */}
-      <View style={styles.list}>
-        {pocketExpenses.length === 0 ? (
-          <Text style={styles.empty}>
-            No expenses yet
+          <Text
+            style={[
+              styles.title,
+              { color: colors.textPrimary },
+            ]}
+          >
+            {pocket.name}
           </Text>
-        ) : (
-          pocketExpenses.map((e) => (
-            <View key={e.id} style={styles.row}>
-              <View>
-                <Text style={styles.amount}>
-                  {formatINR(Math.abs(e.amount))}
-                </Text>
 
-                {e.note && (
-                  <Text style={styles.note}>
-                    {e.note}
-                  </Text>
-                )}
+          <Text
+            style={{ color: colors.textMuted }}
+          >
+            Allocated: {formatINR(pocket.allocated)}
+          </Text>
 
-                <Text style={styles.time}>
-                  {new Date(e.date).toLocaleTimeString()}
-                </Text>
-              </View>
+          <Text
+            style={{
+              marginTop: 8,
+              fontWeight: '600',
+              color:
+                remaining < 0
+                  ? colors.danger
+                  : colors.primary,
+            }}
+          >
+            Remaining: {formatINR(remaining)}
+          </Text>
+        </View>
 
-              <Text
-                style={styles.delete}
-                onPress={() =>
-                  deleteExpense(e.id)
-                }
+        <Text
+          style={{
+            fontSize: 13,
+            fontWeight: '600',
+            marginBottom: 8,
+            color: colors.textMuted,
+          }}
+        >
+          This month
+        </Text>
+
+        <View
+          style={[
+            styles.list,
+            { backgroundColor: colors.surfaceSoft },
+          ]}
+        >
+          {pocketExpenses.length === 0 ? (
+            <Text
+              style={{
+                paddingVertical: 16,
+                color: colors.textMuted,
+              }}
+            >
+              No expenses yet
+            </Text>
+          ) : (
+            pocketExpenses.map(e => (
+              <View
+                key={e.id}
+                style={[
+                  styles.row,
+                  {
+                    borderBottomColor:
+                      colors.divider,
+                  },
+                ]}
               >
-                Delete
-              </Text>
-            </View>
-          ))
-        )}
-      </View>
+                <View>
+                  <Text
+                    style={{
+                      fontWeight: '600',
+                      color:
+                        colors.textPrimary,
+                    }}
+                  >
+                    {formatINR(
+                      Math.abs(e.amount)
+                    )}
+                  </Text>
 
-      {/* =========================
-          Add expense FAB
-         ========================= */}
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color:
+                        colors.textMuted,
+                    }}
+                  >
+                    {e.source}
+                  </Text>
+
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color:
+                        colors.textMuted,
+                    }}
+                  >
+                    {new Date(
+                      e.date
+                    ).toLocaleTimeString()}
+                  </Text>
+                </View>
+
+                <Pressable
+                  onPress={() =>
+                    transactionStore.deleteTransaction(
+                      e.id
+                    )
+                  }
+                >
+                  <Text
+                    style={{
+                      color:
+                        colors.textMuted,
+                      fontWeight: '600',
+                    }}
+                  >
+                    Delete
+                  </Text>
+                </Pressable>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+
       <Pressable
-        style={styles.fab}
+        style={[
+          styles.fab,
+          { backgroundColor: colors.primary },
+        ]}
         onPress={() => setAddOpen(true)}
       >
         <Text style={styles.fabText}>＋</Text>
       </Pressable>
 
-      {/* =========================
-          Add expense modal
-         ========================= */}
       <AddExpenseModal
         visible={addOpen}
         pocketId={pocketId}
         month={currentMonth}
         onClose={() => setAddOpen(false)}
-        onSubmit={(expense) =>
-          expenseStore.addExpense(expense)
-        }
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-
+  screen: { flex: 1 },
   center: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
+    alignItems: 'center',
   },
-
-  muted: {
-    color: colors.textMuted,
-    fontSize: 14,
-  },
-
-  header: {
+  card: {
+    borderRadius: 14,
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    marginBottom: 20,
   },
-
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: colors.textPrimary,
   },
-
-  sub: {
-    marginTop: 4,
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-
-  remaining: {
-    marginTop: 6,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-
-  positive: {
-    color: colors.primary,
-  },
-
-  negative: {
-    color: colors.danger,
-  },
-
   list: {
-    padding: 16,
+    borderRadius: 12,
+    paddingHorizontal: 16,
   },
-
-  empty: {
-    color: colors.textMuted,
-    fontSize: 14,
-  },
-
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
   },
-
-  amount: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-
-  note: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-
-  time: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-
-  delete: {
-    color: colors.danger,
-    fontWeight: '600',
-    alignSelf: 'center',
-  },
-
   fab: {
     position: 'absolute',
     right: 20,
     bottom: 20,
-    backgroundColor: colors.primary,
     width: 56,
     height: 56,
     borderRadius: 28,
-    alignItems: 'center',
     justifyContent: 'center',
-    elevation: 6,
+    alignItems: 'center',
   },
-
   fabText: {
-    color: '#ffffff',
     fontSize: 28,
-    marginTop: -2,
+    color: '#fff',
   },
 });

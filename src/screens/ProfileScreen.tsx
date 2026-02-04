@@ -1,136 +1,317 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
+  ScrollView,
 } from 'react-native';
 import { useSyncExternalStore } from 'react';
 
-import { useSalary } from '../hooks/useSettings';
 import { pocketStore } from '../store/pocket/pocketStore.instance';
+import { transactionStore } from '../store/transaction/transactionStore.instance';
 
-import { formatINR } from '../utils/currency';
 import { getCurrentMonth } from '../utils/month';
 import { colors } from '../themes/colors';
 import { useThemeMode } from '../store/settings/themeStore';
 import { useBalanceVisibility } from '../hooks/useBalanceVisibility';
 import { formatHiddenAmount } from '../utils/formatHiddenAmount';
+import { Logo } from '../components/Logo';
 
 export const ProfileScreen = ({ navigation }: any) => {
   useThemeMode();
   const isBalanceVisible = useBalanceVisibility();
 
-  const salary = useSalary();
   const currentMonth = getCurrentMonth();
 
-  const pocketSummaries = useSyncExternalStore(
+  /* =========================
+     Raw store snapshots (SAFE)
+     ========================= */
+
+  const pockets = useSyncExternalStore(
     pocketStore.subscribe.bind(pocketStore),
-    () =>
-      pocketStore.getAllPocketSummaries(currentMonth)
+    pocketStore.getSnapshot.bind(pocketStore)
   );
 
-  const allocated = pocketSummaries.reduce(
-    (sum, p) => sum + p.allocated,
-    0
+  const transactions = useSyncExternalStore(
+    transactionStore.subscribe.bind(transactionStore),
+    transactionStore.getSnapshot.bind(transactionStore)
   );
 
-  const remaining =
-    typeof salary === 'number'
-      ? salary - allocated
-      : 0;
+  /* =========================
+     Derived values
+     ========================= */
 
-  const hasSalary =
-    typeof salary === 'number' && salary > 0;
+  const salaryIncome = useMemo(() => {
+    return transactions.reduce(
+      (sum, t) =>
+        !t.isDeleted &&
+        t.month === currentMonth &&
+        t.source === 'Salary'
+          ? sum + t.amount
+          : sum,
+      0
+    );
+  }, [transactions, currentMonth]);
+
+  const allocated = useMemo(() => {
+    return pockets.reduce(
+      (sum, p) => sum + p.allocated,
+      0
+    );
+  }, [pockets]);
+
+  const hasSalary = salaryIncome > 0;
+  const remaining = salaryIncome - allocated;
+
+  /* =========================
+     Render
+     ========================= */
 
   return (
-    <View style={styles.container}>
-      {/* =========================
-          Header
-         ========================= */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
-        <Text style={styles.subtitle}>
-          Manage your money setup
-        </Text>
+    <ScrollView
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={{
+        padding: 16,
+        paddingBottom: 32,
+      }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header */}
+      <View style={styles.headerRow}>
+        <View style={styles.logoWrap}>
+          <Logo size={48} />
+        </View>
+
+        <View>
+          <Text
+            style={[
+              styles.headerTitle,
+              { color: colors.textPrimary },
+            ]}
+          >
+            Financial Profile
+          </Text>
+          <Text
+            style={[
+              styles.headerSubtitle,
+              { color: colors.textMuted },
+            ]}
+          >
+            {currentMonth} • Budget & setup
+          </Text>
+        </View>
       </View>
 
-      {/* =========================
-          Money Setup
-         ========================= */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>
+      {/* Monthly Setup */}
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: colors.surfaceSoft },
+        ]}
+      >
+        <Text
+          style={[
+            styles.cardTitle,
+            { color: colors.textMuted },
+          ]}
+        >
           Monthly Setup
         </Text>
 
-        <Text style={styles.salary}>
+        <Text
+          style={[
+            styles.salary,
+            { color: colors.textPrimary },
+          ]}
+        >
           {hasSalary
-            ? formatHiddenAmount(salary, isBalanceVisible)
+            ? formatHiddenAmount(
+                salaryIncome,
+                isBalanceVisible
+              )
             : 'Salary not set'}
         </Text>
 
-
-        {hasSalary && (
+        {hasSalary ? (
           <View style={styles.breakdown}>
             <View style={styles.row}>
-              <Text style={styles.metaLabel}>
+              <Text
+                style={[
+                  styles.metaLabel,
+                  { color: colors.textMuted },
+                ]}
+              >
                 Allocated to pockets
-              </Text>
-              <Text style={styles.metaValue}>
-                {formatHiddenAmount(allocated, isBalanceVisible)}
-              </Text>
-            </View>
-
-            <View style={styles.row}>
-              <Text style={styles.metaLabel}>
-                Remaining
               </Text>
               <Text
                 style={[
                   styles.metaValue,
-                  remaining < 0
-                    ? styles.negative
-                    : styles.positive,
+                  { color: colors.textPrimary },
                 ]}
               >
-                {formatHiddenAmount(remaining, isBalanceVisible)}
+                {formatHiddenAmount(
+                  allocated,
+                  isBalanceVisible
+                )}
+              </Text>
+            </View>
+
+            <View style={styles.row}>
+              <Text
+                style={[
+                  styles.metaLabel,
+                  { color: colors.textMuted },
+                ]}
+              >
+                Unallocated
+              </Text>
+              <Text
+                style={[
+                  styles.metaValue,
+                  {
+                    color:
+                      remaining < 0
+                        ? colors.danger
+                        : colors.primary,
+                  },
+                ]}
+              >
+                {formatHiddenAmount(
+                  remaining,
+                  isBalanceVisible
+                )}
               </Text>
             </View>
           </View>
-        )}
-
-        {!hasSalary && (
+        ) : (
           <Pressable
             style={styles.inlineAction}
             onPress={() =>
               navigation.navigate('Settings')
             }
           >
-            <Text style={styles.inlineActionText}>
-              Set your salary →
+            <Text
+              style={[
+                styles.inlineActionText,
+                { color: colors.primary },
+              ]}
+            >
+              Set salary to unlock insights →
             </Text>
           </Pressable>
         )}
       </View>
 
-      {/* =========================
-          Quick Actions
-         ========================= */}
-      <Text style={styles.sectionTitle}>
-        Quick actions
+      {/* Quick Insights */}
+      {hasSalary && (
+        <View
+          style={[
+            styles.insightCard,
+            { backgroundColor: colors.surfaceSoft },
+          ]}
+        >
+          <Text
+            style={[
+              styles.cardTitle,
+              { color: colors.textMuted },
+            ]}
+          >
+            This Month
+          </Text>
+
+          <View style={styles.row}>
+            <Text
+              style={[
+                styles.metaLabel,
+                { color: colors.textMuted },
+              ]}
+            >
+              Allocated
+            </Text>
+            <Text
+              style={[
+                styles.metaValue,
+                { color: colors.textPrimary },
+              ]}
+            >
+              {formatHiddenAmount(
+                allocated,
+                isBalanceVisible
+              )}
+            </Text>
+          </View>
+
+          <View style={styles.row}>
+            <Text
+              style={[
+                styles.metaLabel,
+                { color: colors.textMuted },
+              ]}
+            >
+              Unallocated
+            </Text>
+            <Text
+              style={[
+                styles.metaValue,
+                {
+                  color:
+                    remaining < 0
+                      ? colors.danger
+                      : colors.primary,
+                },
+              ]}
+            >
+              {formatHiddenAmount(
+                remaining,
+                isBalanceVisible
+              )}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Money Actions */}
+      <Text
+        style={[
+          styles.sectionTitle,
+          { color: colors.textMuted },
+        ]}
+      >
+        Money
       </Text>
 
-      <View style={styles.list}>
+      <View
+        style={[
+          styles.list,
+          { backgroundColor: colors.surfaceSoft },
+        ]}
+      >
         <Pressable
-          style={styles.listRow}
+          style={[
+            styles.listRow,
+            { borderBottomColor: colors.divider },
+          ]}
           onPress={() =>
             navigation.navigate('AddIncome')
           }
         >
-          <Text style={styles.listText}>
-            Add Income
+          <Text
+            style={[
+              styles.listText,
+              { color: colors.textPrimary },
+            ]}
+          >
+            Add income
           </Text>
-          <Text style={styles.chevron}>›</Text>
+          <Text
+            style={[
+              styles.chevron,
+              { color: colors.textMuted },
+            ]}
+          >
+            ›
+          </Text>
         </Pressable>
 
         <Pressable
@@ -139,136 +320,143 @@ export const ProfileScreen = ({ navigation }: any) => {
             navigation.navigate('RecentlyDeleted')
           }
         >
-          <Text style={styles.listText}>
-            Recently Deleted
+          <Text
+            style={[
+              styles.listText,
+              { color: colors.textPrimary },
+            ]}
+          >
+            Recently deleted
           </Text>
-          <Text style={styles.chevron}>›</Text>
+          <Text
+            style={[
+              styles.chevron,
+              { color: colors.textMuted },
+            ]}
+          >
+            ›
+          </Text>
         </Pressable>
       </View>
 
-      {/* =========================
-          App Settings
-         ========================= */}
-      <Text style={styles.sectionTitle}>
+      {/* App */}
+      <Text
+        style={[
+          styles.sectionTitle,
+          { color: colors.textMuted },
+        ]}
+      >
         App
       </Text>
 
-      <View style={styles.list}>
+      <View
+        style={[
+          styles.list,
+          { backgroundColor: colors.surfaceSoft },
+        ]}
+      >
         <Pressable
           style={styles.listRow}
           onPress={() =>
             navigation.navigate('Settings')
           }
         >
-          <Text style={styles.listText}>
+          <Text
+            style={[
+              styles.listText,
+              { color: colors.textPrimary },
+            ]}
+          >
             Settings
           </Text>
-          <Text style={styles.chevron}>›</Text>
+          <Text
+            style={[
+              styles.chevron,
+              { color: colors.textMuted },
+            ]}
+          >
+            ›
+          </Text>
         </Pressable>
       </View>
-    </View>
+    </ScrollView>
   );
 };
 
 /* =========================
-   Styles
+   Styles (unchanged)
    ========================= */
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    padding: 16,
-  },
-
-  header: {
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     marginBottom: 20,
   },
-
-  title: {
-    fontSize: 24,
+  logoWrap: {
+    backgroundColor: colors.surface,
+    padding: 10,
+    borderRadius: 12,
+  },
+  headerTitle: {
+    fontSize: 22,
     fontWeight: '700',
-    color: colors.textPrimary,
   },
-
-  subtitle: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginTop: 4,
+  headerSubtitle: {
+    fontSize: 13,
+    marginTop: 2,
   },
-
   card: {
-    backgroundColor: colors.surfaceSoft,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 20,
+  },
+  insightCard: {
     borderRadius: 14,
     padding: 16,
     marginBottom: 24,
   },
-
   cardTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.textMuted,
     marginBottom: 6,
   },
-
   salary: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.textPrimary,
   },
-
   breakdown: {
-    marginTop: 16,
+    marginTop: 14,
   },
-
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 8,
   },
-
   metaLabel: {
     fontSize: 14,
-    color: colors.textMuted,
   },
-
   metaValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.textPrimary,
   },
-
-  positive: {
-    color: colors.primary,
-  },
-
-  negative: {
-    color: colors.danger,
-  },
-
   inlineAction: {
     marginTop: 12,
   },
-
   inlineActionText: {
-    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
   },
-
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.textMuted,
     marginBottom: 8,
   },
-
   list: {
-    backgroundColor: colors.surfaceSoft,
     borderRadius: 12,
     marginBottom: 20,
   },
-
   listRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -276,17 +464,12 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
   },
-
   listText: {
     fontSize: 16,
     fontWeight: '500',
-    color: colors.textPrimary,
   },
-
   chevron: {
     fontSize: 18,
-    color: colors.textMuted,
   },
 });
