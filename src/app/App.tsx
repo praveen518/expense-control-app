@@ -1,24 +1,85 @@
-import React from 'react';
-import { SafeAreaView, Text, StyleSheet } from 'react-native';
+// src/app/App.tsx
+import React, { useEffect, useState } from 'react';
+import 'react-native-get-random-values';
+import { NavigationContainer } from '@react-navigation/native';
+import { StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-const App = () => {
+import { AppNavigator } from '../navigation/AppNavigator';
+import { UndoDeleteBanner } from '../components/UndoDeleteBanner';
+
+import { openDB } from '../db/db';
+
+import { pocketStore } from '../store/pocket/pocketStore.instance';
+import { loadSettings } from '../store/settingsStore';
+import { runMigrations } from '../db/migrations';
+import { incomeStore } from '../store/income/incomeStore.instance';
+import { balanceStore } from '../store/balance/balanceStore.instance';
+import { themeStore, useThemeMode } from '../store/settings/themeStore';
+import { LockGate } from '../auth/LockGate';
+import { authLockStore } from '../auth/authLock.store';
+import { resolveTheme } from '../themes/theme';
+import { transactionStore } from '../store/transaction/transactionStore.instance';
+
+export default function App() {
+  const [ready, setReady] = useState(false);
+
+  const mode = useThemeMode();
+  const theme = resolveTheme(mode);
+
+  const navTheme = {
+    dark: mode === 'dark',
+    colors: {
+      background: theme.background,
+      card: theme.surfaceSoft,
+      text: theme.textPrimary,
+      border: theme.divider,
+      primary: theme.primary,
+      notification: theme.primary,
+    },
+  };
+
+  useEffect(() => {
+    async function bootstrap() {
+      // 1️⃣ Settings (salary etc.)
+      await loadSettings();
+
+      // 2️⃣ Database + expenses
+      openDB();
+      await runMigrations();
+      authLockStore.hydrateFromSQLite();
+      pocketStore.hydrateFromSQLite();
+      incomeStore.hydrateFromSQLite();
+      transactionStore.hydrateFromSQLite();
+      await balanceStore.hydrate();
+      await themeStore.hydrate();
+      setReady(true);
+    }
+
+    bootstrap();
+  }, []);
+
+  if (!ready) {
+    return null; // splash / loader if needed
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.text}>Expense Control App 🚀</Text>
-    </SafeAreaView>
+    <SafeAreaProvider>
+      <View style={styles.root}>
+        <LockGate>
+          <NavigationContainer theme={navTheme}>
+            <AppNavigator />
+          </NavigationContainer>
+        </LockGate>
+        <UndoDeleteBanner />
+      </View>
+    </SafeAreaProvider>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  text: {
-    fontSize: 20,
-    fontWeight: '600',
+    position: 'relative',
   },
 });
-
-export default App;
